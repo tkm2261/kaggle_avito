@@ -31,7 +31,6 @@ def on_field(f: str, *vec) -> Pipeline:
 
 def preprocess(df: pd.DataFrame) -> pd.DataFrame:
     df['title'] = df['title'].fillna('') + ' ' + df['parent_category_name'].fillna('')
-    """
     df['description'] = (df['description'].fillna('') + ' ' +
                          df['title'] + ' ' +
                          df['region'].fillna('') + ' ' +
@@ -43,32 +42,34 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
                          df['user_type'].fillna('')
                          )
     df['price'] = np.log1p(df['price'].fillna(-1) + 1)
-    """
-    return df[['title']]  # , 'description', 'price', 'item_seq_number']]
+    return df[['title', 'description', 'price', 'item_seq_number']]
 
 
 def train():
     russian_stop = set(stopwords.words('russian'))
     vectorizer = make_union(
-        on_field('title', Tfidf(max_features=1000000, min_df=5, token_pattern='\w+',
+        on_field('title', Tfidf(max_features=1000000, min_df=25, token_pattern='\w+',
                                 stop_words=russian_stop, ngram_range=(1, 2),
+                                lowercase=True,
                                 smooth_idf=False
                                 )),
-        on_field('description', Tfidf(max_features=1000000, min_df=5,
+        on_field('description', Tfidf(max_features=1000000, min_df=25,
+                                      lowercase=True,
                                       token_pattern='\w+', ngram_range=(1, 2), stop_words=russian_stop,
                                       smooth_idf=False)
                  ),
         n_jobs=4)
     df = pd.DataFrame()
     list_size = []
-    for path in ['../input/train.csv', '../input/test.csv', '../input/train_active.csv', '../input/test_active.csv']:
+    # , '../input/train_active.csv', '../input/test_active.csv']:
+    for path in ['../input/train.csv', '../input/test.csv']:
         _df = pd.read_csv(path,
                           usecols=['title',
-                                   #'description', 'price', 'item_seq_number',
+                                   'description', 'price', 'item_seq_number',
                                    'parent_category_name',
-                                   #'region', 'city', 'category_name', 'param_1', 'param_2', 'param_3', 'user_type'
+                                   'region', 'city', 'category_name', 'param_1', 'param_2', 'param_3', 'user_type'
                                    ])
-        list_size.append(df.shape[0])
+        list_size.append(_df.shape[0])
         df = pd.concat([df, _df], axis=0, ignore_index=True)
 
     data = vectorizer.fit_transform(preprocess(df)).astype(np.float32)

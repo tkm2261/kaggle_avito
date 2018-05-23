@@ -122,9 +122,9 @@ def train():
             cnt += 1
             trn_x = x_train[[i for i in range(x_train.shape[0]) if train[i]]]
             val_x = x_train[[i for i in range(x_train.shape[0]) if test[i]]]
-            trn_y = y_train[train]
-            val_y = y_train[test]
-            params = get_hyperparams(trn_x.shape[0], trn_x.shape[1], 1)
+            trn_y = y_train[train].astype('int32')
+            val_y = y_train[test].astype('int32')
+            params = get_hyperparams(trn_x.shape[0], trn_x.shape[1], 2)
             clf = ResFGB(**params)
             best_iters, _, _ = clf.fit(trn_x, trn_y, val_x, val_y, use_best_iter=True)
             pred = clf.predict(val_x)

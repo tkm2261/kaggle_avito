@@ -4,11 +4,11 @@ import numpy as np
 from scipy import sparse
 import pickle
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
-from sklearn.model_selection import StratifiedKFold, KFold
+from sklearn.model_selection import StratifiedKFold, KFold, train_test_split
 from sklearn.linear_model import LogisticRegression
 from multiprocessing import Pool
 from sklearn.model_selection import GridSearchCV, ParameterGrid, StratifiedKFold, cross_val_predict
-#import xgboost as xgb
+# import xgboost as xgb
 from lightgbm.sklearn import LGBMClassifier
 import lightgbm as lgb
 from sklearn.metrics import mean_squared_error
@@ -58,33 +58,38 @@ from scipy import sparse
 def train():
 
     # df = load_train_data()  # .sample(10000000, random_state=42).reset_index(drop=True)
-    df = pd.read_csv('train2.csv', parse_dates=['activation_date'])
+    df = pd.read_csv('train3.csv', parse_dates=['activation_date'])
     df["weekday"] = df['activation_date'].dt.weekday
     train = df['activation_date'] < '2017-03-25'
     test = df['activation_date'] >= '2017-03-25'
+    #train, test = train_test_split(np.arange(df.shape[0]), test_size=0.1, random_state=42)
 
-    #img_data = sparse.load_npz('features.npz').todense()
-    #img_data = pd.DataFrame(img_data, columns=[f'vgg16_{i}' for i in range(img_data.shape[1])])
+    tx_data = pd.read_csv('train2.csv')
+    tx_data = tx_data[[col for col in tx_data if "description" in col or "text_feat" in col or "title" in col]
+                      ]
+    # img_data = sparse.load_npz('features.npz').todense()
+    # img_data = pd.DataFrame(img_data, columns=[f'vgg16_{i}' for i in range(img_data.shape[1])])
     # with open('nn_train.pkl', 'rb') as f:
     #    _nn_data = pickle.load(f)
-    #nn_data = pd.DataFrame(_nn_data, columns=[f'nn_{i}' for i in range(_nn_data.shape[1])])
+    # nn_data = pd.DataFrame(_nn_data, columns=[f'nn_{i}' for i in range(_nn_data.shape[1])])
 
-    with open('train_nn_ns.pkl', 'rb') as f:
-        tfidf = pickle.load(f).tocsc()
-        cols = pd.read_csv('tfidf_cols.csv')['col'].values
-        tfidf = tfidf[:, cols].tocsr()
+    with open('train_tfidf.pkl', 'rb') as f:
+        tfidf = pickle.load(f)  # .tocsc()
+        #cols = pd.read_csv('tfidf_cols.csv')['col'].values
+        #tfidf = tfidf[:, cols].tocsr()
 
     # with open('nn_train_chargram.pkl', 'rb') as f:
     #    _nn_data = pickle.load(f)
-    #nn_data_chargram = pd.DataFrame(_nn_data, columns=[f'nn_chargram_{i}' for i in range(_nn_data.shape[1])])
+    # nn_data_chargram = pd.DataFrame(_nn_data, columns=[f'nn_chargram_{i}' for i in range(_nn_data.shape[1])])
 
     # with open('../fasttext/fast_max_train_title.pkl', 'rb') as f:
     #    fast_data = np.array(pickle.load(f), dtype='float32')
-    #fast_max_data_title = pd.DataFrame(fast_data, columns=[f'fast_title_{i}' for i in range(fast_data.shape[1])])
+    # fast_max_data_title = pd.DataFrame(fast_data, columns=[f'fast_title_{i}' for i in range(fast_data.shape[1])])
     # with open('../fasttext/fast_max_train_desc.pkl', 'rb') as f:
     #    fast_data = np.array(pickle.load(f), dtype='float32')
-    #fast_max_data_desc = pd.DataFrame(fast_data, columns=[f'fast_desc_{i}' for i in range(fast_data.shape[1])])
+    # fast_max_data_desc = pd.DataFrame(fast_data, columns=[f'fast_desc_{i}' for i in range(fast_data.shape[1])])
     df = pd.concat([df,
+                    tx_data,
                     # fast_max_data_title,
                     # nn_data,
                     # img_data
@@ -99,7 +104,7 @@ def train():
     cv = KFold(n_splits=5, shuffle=True, random_state=871)
 
     usecols = df.columns.values.tolist() + [f'tfidf_{i}' for i in range(tfidf.shape[1])]
-    #usecols = list(range(x_train.shape[1]))
+    # usecols = list(range(x_train.shape[1]))
 
     with open(DIR + 'usecols.pkl', 'wb') as f:
         pickle.dump(usecols, f, -1)
@@ -160,7 +165,7 @@ def train():
                             )
             pred = clf.predict(val_x)
 
-            #all_pred[test] = pred
+            # all_pred[test] = pred
 
             _score = np.sqrt(mean_squared_error(val_y, pred))
             _score2 = _score  # - roc_auc_score(val_y, pred)
@@ -185,7 +190,7 @@ def train():
             pickle.dump(all_pred, f, -1)
 
         logger.info('trees: {}'.format(list_best_iter))
-        #trees = np.mean(list_best_iter, dtype=int)
+        # trees = np.mean(list_best_iter, dtype=int)
         score = (np.mean(list_score), np.min(list_score), np.max(list_score))
         score2 = (np.mean(list_score2), np.min(list_score2), np.max(list_score2))
 
@@ -237,7 +242,7 @@ def train():
     logger.info('train end')
     with open(DIR + 'model.pkl', 'wb') as f:
         pickle.dump(clf, f, -1)
-    #del x_train
+    # del x_train
     gc.collect()
 
     logger.info('save end')
@@ -257,30 +262,30 @@ def predict():
     imp.to_csv(DIR + 'feature_importances.csv')
     logger.info('imp use {} {}'.format(imp[imp.imp > 0].shape, n_features))
 
-    #df = load_test_data()
-    df = pd.read_csv('test2.csv', parse_dates=['activation_date'])
+    # df = load_test_data()
+    df = pd.read_csv('test3.csv', parse_dates=['activation_date'])
     df["weekday"] = df['activation_date'].dt.weekday
 
     # with open('nn_test.pkl', 'rb') as f:
     #    _nn_data = pickle.load(f)
-    #nn_data = pd.DataFrame(_nn_data, columns=[f'nn_{i}' for i in range(_nn_data.shape[1])])
+    # nn_data = pd.DataFrame(_nn_data, columns=[f'nn_{i}' for i in range(_nn_data.shape[1])])
 
     # with open('nn_test_chargram.pkl', 'rb') as f:
     #    _nn_data = pickle.load(f)
-    #nn_data_chargram = pd.DataFrame(_nn_data, columns=[f'nn_chargram_{i}' for i in range(_nn_data.shape[1])])
+    # nn_data_chargram = pd.DataFrame(_nn_data, columns=[f'nn_chargram_{i}' for i in range(_nn_data.shape[1])])
 
     # with open('../fasttext/fast_max_test_title.pkl', 'rb') as f:
     #    fast_data = np.array(pickle.load(f), dtype='float32')
-    #fast_max_data_title = pd.DataFrame(fast_data, columns=[f'fast_title_{i}' for i in range(fast_data.shape[1])])
+    # fast_max_data_title = pd.DataFrame(fast_data, columns=[f'fast_title_{i}' for i in range(fast_data.shape[1])])
     # with open('../fasttext/fast_max_test_desc.pkl', 'rb') as f:
     #    fast_data = np.array(pickle.load(f), dtype='float32')
-    #fast_max_data_desc = pd.DataFrame(fast_data, columns=[f'fast_desc_{i}' for i in range(fast_data.shape[1])])
+    # fast_max_data_desc = pd.DataFrame(fast_data, columns=[f'fast_desc_{i}' for i in range(fast_data.shape[1])])
     df = pd.concat([df,
                     # fast_max_data_title,
                     # nn_data,
                     # img_data
                     ], axis=1)
-    with open('test_nn_ns.pkl', 'rb') as f:
+    with open('test_nn.pkl', 'rb') as f:
         tfidf = pickle.load(f).tocsc()
         cols = pd.read_csv('tfidf_cols.csv')['col'].values
         tfidf = tfidf[:, cols].tocsr()
