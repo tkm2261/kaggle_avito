@@ -5,12 +5,9 @@ from scipy import sparse
 import pickle
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.model_selection import StratifiedKFold, KFold, train_test_split
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import Ridge
 from multiprocessing import Pool
 from sklearn.model_selection import GridSearchCV, ParameterGrid, StratifiedKFold, cross_val_predict
-# import xgboost as xgb
-from lightgbm.sklearn import LGBMClassifier
-import lightgbm as lgb
 from sklearn.metrics import mean_squared_error
 import gc
 from logging import getLogger
@@ -20,14 +17,20 @@ from tqdm import tqdm
 
 from load_data import load_train_data, load_test_data
 import sys
-DIR = 'result_tmp/'  # sys.argv[1]  # 'result_1008_rate001/'
+DIR = 'result_ridge_tmp/'  # sys.argv[1]  # 'result_1008_rate001/'
 print(DIR)
 
 
 def cst_metric_xgb(pred, dtrain):
     label = dtrain.get_label().astype(np.int)
-    sc = np.sqrt(mean_squared_error(label, pred.clip(0, 1)))
-    return 'rmse_clip', sc, True
+    preds = pred.reshape((21, -1)).T
+    preds = np.array([np.argmax(x) for x in preds], dtype=np.int)
+    sc = log_loss(label, preds)
+    return 'qwk', sc, True
+
+
+def dummy(pred, dtrain):
+    return 'dummy', pred, True
 
 
 def callback(data):
@@ -51,7 +54,7 @@ from scipy import sparse
 
 def train():
 
-    # df = load_train_data()  # .sample(10000000, random_state=42).reset_index(drop=True)
+    # df = load_train_data()
     df = pd.read_csv('train_0526.csv', parse_dates=['t_activation_date'])
 
     train = df['t_activation_date'] < '2017-03-26'
@@ -114,35 +117,9 @@ def train():
     with open(DIR + 'usecols.pkl', 'wb') as f:
         pickle.dump(usecols, f, -1)
 
-    # {'colsample_bytree': 0.7, 'learning_rate': 0.1, 'max_bin': 255, 'max_depth': -1, 'metric': 'rmse', 'min_child_weight': 5, 'min_split_gain': 0, 'num_leaves': 255, 'objective': 'regression_l2', 'reg_alpha': 1, 'scale_pos_weight': 1, 'seed': 114, 'subsample': 1, 'subsample_freq': 1, 'verbose': -1}
-    """
-    all_params = {'min_child_weight': [5],
-                  'subsample': [1],
-                  'subsample_freq': [1],
-                  'seed': [114],
-                  'colsample_bytree': [0.7],
-                  'learning_rate': [0.1],
-                  'max_depth': [-1],
-                  'min_split_gain': [0],
-                  'reg_alpha': [1, 10, 5],
-                  'max_bin': [255],
-                  'num_leaves': [255, 127, 53],
-                  'objective': ['regression_l2'],
-                  'scale_pos_weight': [1],
-                  'verbose': [-1],
-                  #'device': ['gpu'],
-                  }
-    """
-    #_params = {'colsample_bytree': 0.7, 'learning_rate': 0.1, 'max_bin': 255, 'max_depth': -1, 'metric': 'rmse', 'min_child_weight': 5, 'min_split_gain': 0, 'num_leaves': 255, 'objective': 'regression_l2', 'reg_alpha': 1, 'scale_pos_weight': 1, 'seed': 114, 'subsample': 1, 'subsample_freq': 1, 'verbose': -1}
     _params = {
-        'boosting_type': 'gbdt',
-        'objective': 'regression',
-        # 'max_depth': 15,
-        'num_leaves': 300,
-        'feature_fraction': 0.65,
-        'bagging_fraction': 0.85,
-        # 'bagging_freq': 5,
-        'learning_rate': 0.02,
+        'alpha': 20.0, 'fit_intercept': True, 'normalize': False, 'copy_X': True,
+        'max_iter': None, 'tol': 0.001, 'solver': 'auto', 'random_state': 114
     }
     all_params = {p: [v] for p, v in _params.items()}
     use_score = 0
@@ -159,25 +136,9 @@ def train():
             val_x = x_train[[i for i in range(x_train.shape[0]) if test[i]]]
             trn_y = y_train[train]
             val_y = y_train[test]
-            train_data = lgb.Dataset(trn_x,  # .values.astype(np.float32),
-                                     label=trn_y,
-                                     feature_name=usecols
-                                     )
-            test_data = lgb.Dataset(val_x,  # .values.astype(np.float32),
-                                    label=val_y,
-                                    feature_name=usecols
-                                    )
-            del trn_x
-            gc.collect()
-            clf = lgb.train(params,
-                            train_data,
-                            20000,  # params['n_estimators'],
-                            early_stopping_rounds=30,
-                            valid_sets=[test_data],
-                            feval=cst_metric_xgb,
-                            # callbacks=[callback],
-                            verbose_eval=10
-                            )
+
+            clf = Ridge(**params)
+            clf.fit(trn_x, trn_y)
             pred = clf.predict(val_x).clip(0, 1)
 
             all_pred[test] = pred
@@ -191,11 +152,6 @@ def train():
             list_score.append(_score)
             list_score2.append(_score2)
 
-            if clf.best_iteration != 0:
-                list_best_iter.append(clf.best_iteration)
-            else:
-                list_best_iter.append(params['n_estimators'])
-
             with open(DIR + 'train_cv_pred_%s.pkl' % cnt, 'wb') as f:
                 pickle.dump(pred, f, -1)
             with open(DIR + 'model_%s.pkl' % cnt, 'wb') as f:
@@ -205,7 +161,6 @@ def train():
             pickle.dump(all_pred, f, -1)
 
         logger.info('trees: {}'.format(list_best_iter))
-        # trees = np.mean(list_best_iter, dtype=int)
         score = (np.mean(list_score), np.min(list_score), np.max(list_score))
         score2 = (np.mean(list_score2), np.min(list_score2), np.max(list_score2))
 
@@ -223,38 +178,12 @@ def train():
 
         logger.info('best params: {}'.format(min_params))
 
-    imp = pd.DataFrame(clf.feature_importance(), columns=['imp'])
-    imp['col'] = usecols
-    n_features = imp.shape[0]
-    imp = imp.sort_values('imp', ascending=False)
-    imp.to_csv(DIR + 'feature_importances_0.csv')
-    logger.info('imp use {} {}'.format(imp[imp.imp > 0].shape, n_features))
-
-    del val_x
-    del trn_y
-    del val_y
-    del train_data
-    del test_data
-    gc.collect()
-
-    trees = np.mean(list_best_iter)
-
     logger.info('all data size {}'.format(x_train.shape))
 
-    train_data = lgb.Dataset(x_train,
-                             label=y_train,
-                             feature_name=usecols
-                             )
-    del x_train
-    gc.collect()
     logger.info('train start')
-    clf = lgb.train(min_params,
-                    train_data,
-                    int(trees * 1.1),
-                    valid_sets=[train_data],
-                    feval=cst_metric_xgb,
-                    verbose_eval=10
-                    )
+    clf = Ridge(**min_params)
+
+    clf.fit(x_train, y_train)
     logger.info('train end')
     with open(DIR + 'model.pkl', 'wb') as f:
         pickle.dump(clf, f, -1)
@@ -270,14 +199,6 @@ def predict():
 
     with open(DIR + 'usecols.pkl', 'rb') as f:
         usecols = pickle.load(f)
-
-    imp = pd.DataFrame(clf.feature_importance(), columns=['imp'])
-    imp['col'] = usecols
-    n_features = imp.shape[0]
-    imp = imp.sort_values('imp', ascending=False)
-    imp.to_csv(DIR + 'feature_importances.csv')
-    logger.info('imp use {} {}'.format(imp[imp.imp > 0].shape, n_features))
-
     # df = load_test_data()
     df = pd.read_csv('test_0526.csv', parse_dates=['t_activation_date'])
     tx_data = pd.read_csv('test2.csv')
@@ -310,16 +231,8 @@ def predict():
 
     logger.info('data size {}'.format(df.shape))
 
-    # for col in usecols:
-    #    if col not in df.columns.values:
-    #        df[col] = np.zeros(df.shape[0])
-    #        logger.info('no col %s' % col)
-
     x_test = df[[col for col in usecols if 'tfidf' not in col]]
     x_test = sparse.hstack([x_test.values.astype('float32'), tfidf_title], format='csr')
-
-    if x_test.shape[1] != n_features:
-        raise Exception('Not match feature num: %s %s' % (x_test.shape[1], n_features))
 
     logger.info('test load end')
 
