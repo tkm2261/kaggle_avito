@@ -14,16 +14,19 @@ from multiprocessing import Pool
 from logging import getLogger
 logger = getLogger(__name__)
 
-TRAIN_DATA_PATH = '../input/train.csv'
-TEST_DATA_PATH = '../input/test.csv'
-
-NOT_CAT_COLS = ['title', 'description', 'image', 'activation_date']
+TRAIN_DATA_PATH = '../data/dmt_train_0526/'
+TEST_DATA_PATH = '../data/dmt_test_0526/'
 
 
 def read_csv(filename):
     logger.info(filename)
-    df = pd.read_csv(filename, parse_dates=['activation_date'])
-    df.sort_values('data_id', inplace=True)
+    df = pd.read_csv(filename, parse_dates=['t_activation_date'])
+    df.drop(['t_image', 'p_item_id', 'i_item_id', 'u_user_id', 'c_category_name',
+             'ct_city', 'isn_item_seq_number', 'pc_parent_category_name',
+             'r_region', 'ut_user_type', 'it1_image_top_1'],
+            axis=1, inplace=True, errors='ignore')
+    
+    df.sort_values('t_data_id', inplace=True)
     return df
 
 
@@ -49,7 +52,7 @@ def _map_data(df_col):
 
 def run_col(df_col):
     col = df_col.name
-    if col in ['item_id', 'user_id']:
+    if col in ['t_item_id', 't_user_id']:
         return _map_data(df_col)
     else:
         return _run_col(df_col)
@@ -57,11 +60,10 @@ def run_col(df_col):
 
 def make_map_encoder():
     logger.info('enter')
-    paths = sorted(glob.glob('../data/dmt_train/*.csv.gz'))
+    paths = sorted(glob.glob(TRAIN_DATA_PATH + '*.csv.gz'))
     with Pool() as p:
         df = pd.concat(p.map(read_csv, paths), ignore_index=True, axis=0, copy=False)
 
-    df.drop(NOT_CAT_COLS, axis=1, inplace=True, errors='ignore')
     map_encoder = {}
 
     p = Pool()
@@ -76,6 +78,7 @@ def make_map_encoder():
 
 
 def _proc_cat(col, df, enc):
+    logger.info(f'start: {col}')    
     df_col = df.copy()
     df_col[col] = df[col].fillna('NULL')
     try:
@@ -96,7 +99,7 @@ def _proc_map(col, df, enc):
 
 def _proc_data(col, df, enc):
     logger.info(col)
-    if col in ['item_id', 'user_id']:
+    if col in ['t_item_id', 't_user_id']:
         return _proc_map(col, df, enc)
     else:
         return _proc_cat(col, df, enc)
@@ -104,7 +107,7 @@ def _proc_data(col, df, enc):
 
 def load_train_data():
     logger.info('enter')
-    paths = sorted(glob.glob('../data/dmt_train/*.csv.gz'))
+    paths = sorted(glob.glob(TRAIN_DATA_PATH + '*.csv.gz'))
     with Pool() as p:
         df = pd.concat(p.map(read_csv, paths), ignore_index=True, axis=0, copy=False)
 
@@ -127,12 +130,10 @@ def load_train_data():
     logger.info('set end')
     df.drop([data[0] for data in list_proc_data], axis=1, inplace=True)
 
-    df.drop(['title', 'description', 'image'], axis=1, inplace=True, errors='ignore')
-
     df = pd.concat([df, tmp], axis=1)
 
-    df.sort_values('data_id', inplace=True)
-    df.drop('data_id', axis=1, inplace=True)
+    df.sort_values('t_data_id', inplace=True)
+    df.drop('t_data_id', axis=1, inplace=True)
 
     logger.info(f'data size: {df.shape}')
     logger.info('merge end')
@@ -143,17 +144,13 @@ def load_train_data():
 
 def load_test_data():
     logger.info('enter')
-    paths = sorted(glob.glob('../data/dmt_test/*.csv.gz'))
+    paths = sorted(glob.glob(TEST_DATA_PATH + '*.csv.gz'))
     with Pool() as p:
         df = pd.concat(p.map(read_csv, paths), ignore_index=True, axis=0, copy=False)
 
     with open('map_encoder.pkl', 'rb') as f:
         map_encoder = pickle.load(f)
     list_proc_data = []
-    col = 'item_id'
-    enc = map_encoder[col]
-
-    _proc_data(col, df[[col]], enc)
 
     p = Pool()
     for col in map_encoder:
@@ -170,11 +167,10 @@ def load_test_data():
     tmp = pd.DataFrame(datas, columns=cols)
     logger.info('set end')
     df.drop([data[0] for data in list_proc_data], axis=1, inplace=True)
-    df.drop(['title', 'description', 'image'], axis=1, inplace=True, errors='ignore')
 
     df = pd.concat([df, tmp], axis=1)
-    df.sort_values('data_id', inplace=True)
-    df.drop('data_id', axis=1, inplace=True)
+    df.sort_values('t_data_id', inplace=True)
+    df.drop('t_data_id', axis=1, inplace=True)
 
     logger.info(f'data size: {df.shape}')
     logger.info('merge end')
@@ -201,5 +197,5 @@ if __name__ == '__main__':
 
     make_map_encoder()
     # print(load_train_data().head())
-    load_train_data().to_csv('train3.csv', index=False)
-    load_test_data().to_csv('test3.csv', index=False)
+    load_train_data().to_csv('train_0526.csv', index=False)
+    load_test_data().to_csv('test_0526.csv', index=False)

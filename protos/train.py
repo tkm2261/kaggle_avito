@@ -58,10 +58,10 @@ from scipy import sparse
 def train():
 
     # df = load_train_data()  # .sample(10000000, random_state=42).reset_index(drop=True)
-    df = pd.read_csv('train3.csv', parse_dates=['activation_date'])
-    df["weekday"] = df['activation_date'].dt.weekday
-    train = df['activation_date'] < '2017-03-26'
-    test = df['activation_date'] >= '2017-03-26'
+    df = pd.read_csv('train_0526.csv', parse_dates=['t_activation_date'])
+    
+    train = df['t_activation_date'] < '2017-03-26'
+    test = df['t_activation_date'] >= '2017-03-26'
     #train, test = train_test_split(np.arange(df.shape[0]), test_size=0.1, random_state=42)
 
     tx_data = pd.read_csv('train2.csv')
@@ -99,9 +99,12 @@ def train():
                     # nn_data,
                     # img_data
                     ], axis=1)
-    y_train = df['deal_probability'].values
+    y_train = df['t_deal_probability'].values
 
-    df = df.drop(['deal_probability', 'activation_date', 'item_id'], axis=1)
+    df = df.drop(['t_deal_probability', 't_activation_date', 't_item_id'] + ['i_sum_item_deal_probability', 'u_sum_user_deal_probability', 'isn_sum_isn_deal_probability', 'it1_sum_im1_deal_probability', 'pc_sum_pcat_deal_probability', 'ct_sum_city_deal_probability', 'c_sum_category_deal_probability', 'ut_sum_usertype_deal_probability', 'r_sum_region_deal_probability'] + ['i_avg_item_deal_probability',
+                 'it1_avg_im1_deal_probability',
+                 'u_avg_user_deal_probability']
+                 , axis=1)
     x_train = df
     x_train = sparse.hstack([x_train.values.astype('float32'),
                              tfidf_title,
@@ -119,6 +122,7 @@ def train():
         pickle.dump(usecols, f, -1)
 
     # {'colsample_bytree': 0.7, 'learning_rate': 0.1, 'max_bin': 255, 'max_depth': -1, 'metric': 'rmse', 'min_child_weight': 5, 'min_split_gain': 0, 'num_leaves': 255, 'objective': 'regression_l2', 'reg_alpha': 1, 'scale_pos_weight': 1, 'seed': 114, 'subsample': 1, 'subsample_freq': 1, 'verbose': -1}
+    """
     all_params = {'min_child_weight': [5],
                   'subsample': [1],
                   'subsample_freq': [1],
@@ -137,9 +141,19 @@ def train():
                   #'device': ['gpu'],
                   }
     """
-    _params = {'colsample_bytree': 0.7, 'learning_rate': 0.1, 'max_bin': 255, 'max_depth': -1, 'metric': 'rmse', 'min_child_weight': 5, 'min_split_gain': 0, 'num_leaves': 255, 'objective': 'regression_l2', 'reg_alpha': 1, 'scale_pos_weight': 1, 'seed': 114, 'subsample': 1, 'subsample_freq': 1, 'verbose': -1}
+    #_params = {'colsample_bytree': 0.7, 'learning_rate': 0.1, 'max_bin': 255, 'max_depth': -1, 'metric': 'rmse', 'min_child_weight': 5, 'min_split_gain': 0, 'num_leaves': 255, 'objective': 'regression_l2', 'reg_alpha': 1, 'scale_pos_weight': 1, 'seed': 114, 'subsample': 1, 'subsample_freq': 1, 'verbose': -1}
+    _params = {
+    'boosting_type': 'gbdt',
+    'objective': 'regression',
+    'metric': 'rmse',
+    # 'max_depth': 15,
+    'num_leaves': 300,
+    'feature_fraction': 0.65,
+    'bagging_fraction': 0.85,
+    # 'bagging_freq': 5,
+    'learning_rate': 0.02,
+      }  
     all_params = {p: [v] for p, v in _params.items()}
-    """
     use_score = 0
     min_score = (100, 100, 100)
     for params in tqdm(list(ParameterGrid(all_params))):
@@ -167,7 +181,7 @@ def train():
             gc.collect()
             clf = lgb.train(params,
                             train_data,
-                            10000,  # params['n_estimators'],
+                            20000,  # params['n_estimators'],
                             early_stopping_rounds=30,
                             valid_sets=[test_data],
                             # feval=cst_metric_xgb,
@@ -274,8 +288,7 @@ def predict():
     logger.info('imp use {} {}'.format(imp[imp.imp > 0].shape, n_features))
 
     # df = load_test_data()
-    df = pd.read_csv('test3.csv', parse_dates=['activation_date'])
-    df["weekday"] = df['activation_date'].dt.weekday
+    df = pd.read_csv('test_0526.csv', parse_dates=['t_activation_date'])
     tx_data = pd.read_csv('test2.csv')
     tx_data = tx_data[[col for col in tx_data if "description" in col or "text_feat" in col or "title" in col]]
 
