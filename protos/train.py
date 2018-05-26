@@ -60,8 +60,8 @@ def train():
     # df = load_train_data()  # .sample(10000000, random_state=42).reset_index(drop=True)
     df = pd.read_csv('train3.csv', parse_dates=['activation_date'])
     df["weekday"] = df['activation_date'].dt.weekday
-    train = df['activation_date'] < '2017-03-25'
-    test = df['activation_date'] >= '2017-03-25'
+    train = df['activation_date'] < '2017-03-26'
+    test = df['activation_date'] >= '2017-03-26'
     #train, test = train_test_split(np.arange(df.shape[0]), test_size=0.1, random_state=42)
 
     tx_data = pd.read_csv('train2.csv')
@@ -74,10 +74,15 @@ def train():
     # nn_data = pd.DataFrame(_nn_data, columns=[f'nn_{i}' for i in range(_nn_data.shape[1])])
 
     with open('train_tfidf.pkl', 'rb') as f:
+        tfidf_title = pickle.load(f)  # .tocsc()
+        cols = pd.read_csv('tfidf_cols4.csv')['col'].values
+        tfidf_title = tfidf_title[:, cols].tocsr()
+    """
+    with open('train_tfidf_desc.pkl', 'rb') as f:
         tfidf = pickle.load(f)  # .tocsc()
-        #cols = pd.read_csv('tfidf_cols.csv')['col'].values
-        #tfidf = tfidf[:, cols].tocsr()
-
+        cols = pd.read_csv('tfidf_desc_cols.csv')['col'].values
+        tfidf_desc = tfidf[:, cols].tocsr()
+    """
     # with open('nn_train_chargram.pkl', 'rb') as f:
     #    _nn_data = pickle.load(f)
     # nn_data_chargram = pd.DataFrame(_nn_data, columns=[f'nn_chargram_{i}' for i in range(_nn_data.shape[1])])
@@ -98,20 +103,22 @@ def train():
 
     df = df.drop(['deal_probability', 'activation_date', 'item_id'], axis=1)
     x_train = df
-    x_train = sparse.hstack([x_train.values.astype('float32'), tfidf], format='csr')
+    x_train = sparse.hstack([x_train.values.astype('float32'),
+                             tfidf_title,
+                             #tfidf_desc
+    ], format='csr')
 
     logger.info('train data size {}'.format(x_train.shape))
     cv = KFold(n_splits=5, shuffle=True, random_state=871)
 
-    usecols = df.columns.values.tolist() + [f'tfidf_{i}' for i in range(tfidf.shape[1])]
+    usecols = df.columns.values.tolist() + [f'tfidf_title_{i}' for i in range(tfidf_title.shape[1])] 
+    #          + [f'tfidf_desc_{i}' for i in range(tfidf_desc.shape[1])]
     # usecols = list(range(x_train.shape[1]))
 
     with open(DIR + 'usecols.pkl', 'wb') as f:
         pickle.dump(usecols, f, -1)
 
-    # 2018-05-19 00:32:28,463 root 157 [INFO][train] best score: 0.22563737033010078
-    # fast title 0.22455
-    # {'colsample_bytree': 0.7, 'learning_rate': 0.1, 'max_bin': 255, 'max_depth': -1, 'metric': 'rmse', 'min_child_weight': 5, 'min_split_gain': 0.0001, 'num_leaves': 255, 'objective': 'regression_l2', 'reg_alpha': 0, 'scale_pos_weight': 1, 'seed': 114, 'subsample': 1, 'subsample_freq': 1, 'verbose': -1}
+    # {'colsample_bytree': 0.7, 'learning_rate': 0.1, 'max_bin': 255, 'max_depth': -1, 'metric': 'rmse', 'min_child_weight': 5, 'min_split_gain': 0, 'num_leaves': 255, 'objective': 'regression_l2', 'reg_alpha': 1, 'scale_pos_weight': 1, 'seed': 114, 'subsample': 1, 'subsample_freq': 1, 'verbose': -1}
     all_params = {'min_child_weight': [5],
                   'subsample': [1],
                   'subsample_freq': [1],
@@ -119,16 +126,20 @@ def train():
                   'colsample_bytree': [0.7],
                   'learning_rate': [0.1],
                   'max_depth': [-1],
-                  'min_split_gain': [0.0001],
-                  'reg_alpha': [0.1],
+                  'min_split_gain': [0],
+                  'reg_alpha': [1, 10, 5],
                   'max_bin': [255],
-                  'num_leaves': [255],
+                  'num_leaves': [255, 127, 53],
                   'objective': ['regression_l2'],
                   'metric': ['rmse'],
                   'scale_pos_weight': [1],
                   'verbose': [-1],
                   #'device': ['gpu'],
                   }
+    """
+    _params = {'colsample_bytree': 0.7, 'learning_rate': 0.1, 'max_bin': 255, 'max_depth': -1, 'metric': 'rmse', 'min_child_weight': 5, 'min_split_gain': 0, 'num_leaves': 255, 'objective': 'regression_l2', 'reg_alpha': 1, 'scale_pos_weight': 1, 'seed': 114, 'subsample': 1, 'subsample_freq': 1, 'verbose': -1}
+    all_params = {p: [v] for p, v in _params.items()}
+    """
     use_score = 0
     min_score = (100, 100, 100)
     for params in tqdm(list(ParameterGrid(all_params))):
@@ -265,6 +276,8 @@ def predict():
     # df = load_test_data()
     df = pd.read_csv('test3.csv', parse_dates=['activation_date'])
     df["weekday"] = df['activation_date'].dt.weekday
+    tx_data = pd.read_csv('test2.csv')
+    tx_data = tx_data[[col for col in tx_data if "description" in col or "text_feat" in col or "title" in col]]
 
     # with open('nn_test.pkl', 'rb') as f:
     #    _nn_data = pickle.load(f)
@@ -281,14 +294,15 @@ def predict():
     #    fast_data = np.array(pickle.load(f), dtype='float32')
     # fast_max_data_desc = pd.DataFrame(fast_data, columns=[f'fast_desc_{i}' for i in range(fast_data.shape[1])])
     df = pd.concat([df,
+                    tx_data,
                     # fast_max_data_title,
                     # nn_data,
                     # img_data
                     ], axis=1)
-    with open('test_nn.pkl', 'rb') as f:
-        tfidf = pickle.load(f).tocsc()
-        cols = pd.read_csv('tfidf_cols.csv')['col'].values
-        tfidf = tfidf[:, cols].tocsr()
+    with open('test_tfidf.pkl', 'rb') as f:
+        tfidf_title = pickle.load(f)  # .tocsc()
+        cols = pd.read_csv('tfidf_cols4.csv')['col'].values
+        tfidf_title = tfidf_title[:, cols].tocsr()
 
     logger.info('data size {}'.format(df.shape))
 
@@ -298,7 +312,7 @@ def predict():
     #        logger.info('no col %s' % col)
 
     x_test = df[[col for col in usecols if 'tfidf' not in col]]
-    x_test = sparse.hstack([x_test.values.astype('float32'), tfidf], format='csr')
+    x_test = sparse.hstack([x_test.values.astype('float32'), tfidf_title], format='csr')
 
     if x_test.shape[1] != n_features:
         raise Exception('Not match feature num: %s %s' % (x_test.shape[1], n_features))

@@ -23,6 +23,7 @@ NOT_CAT_COLS = ['title', 'description', 'image', 'activation_date']
 def read_csv(filename):
     logger.info(filename)
     df = pd.read_csv(filename, parse_dates=['activation_date'])
+    df.sort_values('data_id', inplace=True)
     return df
 
 
