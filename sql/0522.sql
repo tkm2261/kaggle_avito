@@ -80,18 +80,7 @@ SELECT
   AVG(CASE WHEN user_type = 'Private' THEN 1 ELSE 0 END) as rate_uq_user_user_type_private,
   AVG(CASE WHEN user_type = 'Company' THEN 1 ELSE 0 END) as rate_uq_user_user_type_company,
   AVG(CASE WHEN user_type = 'Shop' THEN 1 ELSE 0 END) as rate_uq_user_user_type_shop,
-  count(distinct image_top_1) as uq_image_top_1,
-
-  AVG(delay) as avg_user_delay,
-  MIN(delay) as min_user_delay,
-  MAX(delay) as max_user_delay,
-  STDDEV(delay) as std_user_delay,
-
-  AVG(duration) as avg_user_duration,
-  MIN(duration) as min_user_duration,
-  MAX(duration) as max_user_duration,
-  STDDEV(duration) as std_user_duration
-
+  count(distinct image_top_1) as uq_image_top_1
 FROM
   avito.train_test
 GROUP BY
@@ -136,17 +125,146 @@ SELECT
   AVG(CASE WHEN user_type = 'Private' THEN 1 ELSE 0 END) as rate_uq_item_user_type_private,
   AVG(CASE WHEN user_type = 'Company' THEN 1 ELSE 0 END) as rate_uq_item_user_type_company,
   AVG(CASE WHEN user_type = 'Shop' THEN 1 ELSE 0 END) as rate_uq_item_user_type_shop,
-  count(distinct image_top_1) as uq_item_image_top_1,
-  AVG(delay) as avg_item_delay,
-  MIN(delay) as min_item_delay,
-  MAX(delay) as max_item_delay,
-  STDDEV(delay) as std_item_delay,
-
-  AVG(duration) as avg_item_duration,
-  MIN(duration) as min_item_duration,
-  MAX(duration) as max_item_duration,
-  STDDEV(duration) as std_item_duration
+  count(distinct image_top_1) as uq_item_image_top_1
 FROM
   avito.train_test
 GROUP BY
     item_id
+
+
+-- avito.train_test2
+SELECT
+t.data_id as data_id,
+t.deal_probability as deal_probability,
+t.item_id as item_id,
+t.user_id as user_id,
+t.region as region,
+t.city as city,
+t.parent_category_name as parent_category_name,
+t.category_name as category_name,
+t.param_1 as param_1,
+t.param_2 as param_2,
+t.param_3 as param_3,
+t.price as price,
+t.item_seq_number as item_seq_number,
+t.activation_date as activation_date,
+t.user_type as user_type,
+t.image as image,
+t.image_top_1 as image_top_1,
+t.activation_weekday as activation_weekday,
+t.avg_activation_date_weekday as avg_activation_date_weekday,
+t.avg_date_from_weekday as avg_date_from_weekday,
+t.avg_date_to_weekday as avg_date_to_weekday,
+t.avg_delay as avg_delay,
+t.min_delay as min_delay,
+t.max_delay as max_delay,
+t.std_delay as std_delay,
+t.sum_delay as sum_delay,
+t.avg_duration as avg_duration,
+t.min_duration as min_duration,
+t.max_duration as max_duration,
+t.std_duration as std_duration,
+t.sum_duration as sum_duration,
+
+i.cnt_item,
+i.uq_item_user,
+i.uq_item_region,
+i.uq_item_city,
+i.uq_item_parent_category_name,
+i.uq_item_category_name,
+i.uq_item_param_1,
+i.uq_item_param_2,
+i.uq_item_param_3,
+i.avg_item_price,
+i.min_item_price,
+i.max_item_price,
+i.std_item_price,
+i.avglog_item_price,
+i.uq_item_item_seq_number,
+i.avg_item_item_seq_number,
+i.min_item_item_seq_number,
+i.max_item_item_seq_number,
+i.std_item_item_seq_number,
+i.avglog_item_item_seq_number,
+i.uq_item_activation_weekday,
+i.rate_uq_item_activation_1,
+i.rate_uq_item_activation_2,
+i.rate_uq_item_activation_3,
+i.rate_uq_item_activation_4,
+i.rate_uq_item_activation_5,
+i.rate_uq_item_activation_6,
+i.rate_uq_item_activation_7,
+i.uq_item_user_type,
+i.rate_uq_item_user_type_private,
+i.rate_uq_item_user_type_company,
+i.rate_uq_item_user_type_shop,
+i.uq_item_image_top_1,
+u.cnt_user,
+u.uq_user_item,
+u.uq_user_region,
+u.uq_user_city,
+u.uq_user_parent_category_name,
+u.uq_user_category_name,
+u.uq_user_param_1,
+u.uq_user_param_2,
+u.uq_user_param_3,
+u.avg_user_price,
+u.min_user_price,
+u.max_user_price,
+u.std_user_price,
+u.avglog_user_price,
+u.uq_user_item_seq_number,
+u.avg_user_item_seq_number,
+u.min_user_item_seq_number,
+u.max_user_item_seq_number,
+u.std_user_item_seq_number,
+u.avglog_user_item_seq_number,
+u.uq_user_activation_weekday,
+u.rate_uq_user_activation_1,
+u.rate_uq_user_activation_2,
+u.rate_uq_user_activation_3,
+u.rate_uq_user_activation_4,
+u.rate_uq_user_activation_5,
+u.rate_uq_user_activation_6,
+u.rate_uq_user_activation_7,
+u.uq_user_user_type,
+u.rate_uq_user_user_type_private,
+u.rate_uq_user_user_type_company,
+u.rate_uq_user_user_type_shop,
+u.uq_image_top_1,
+p.avg_activation_date_weekday,
+p.avg_date_from_weekday,
+p.avg_date_to_weekday,
+p.avg_delay,
+p.min_delay,
+p.max_delay,
+p.std_delay,
+p.avg_duration,
+p.min_duration,
+p.max_duration,
+p.std_duration
+
+FROM
+'avito.train_test' as t
+LEFT OUTER JOIN `avito.dmt_item_periods` as p
+ON t.item_id = p.item_id
+LEFT OUTER JOIN `avito.dmt_item` as i
+ON t.item_id = i.item_id
+LEFT OUTER JOIN `avito.dmt_user` as u
+ON t.user_id = i.user_id
+
+-- avito.dmt_train
+SELECT
+*
+FROM
+`avito.train_test2`
+WHERE
+deal_probability is not null
+
+-- avito.dmt_test
+SELECT
+*
+FROM
+`avito.train_test2`
+WHERE
+deal_probability is null
