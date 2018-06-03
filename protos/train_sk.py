@@ -59,7 +59,7 @@ def train():
 
     train = df['t_activation_date'] < '2017-03-26'
     test = df['t_activation_date'] >= '2017-03-26'
-    #train, test = train_test_split(np.arange(df.shape[0]), test_size=0.1, random_state=42)
+    # train, test = train_test_split(np.arange(df.shape[0]), test_size=0.1, random_state=42)
 
     tx_data = pd.read_csv('train2.csv')
     tx_data = tx_data[[col for col in tx_data if "description" in col or "text_feat" in col or "title" in col]
@@ -95,18 +95,20 @@ def train():
                     # fast_max_data_title,
                     # nn_data,
                     # img_data
-                    ], axis=1)
+                    ], axis=1).fillna(-1)
     y_train = df['t_deal_probability'].values
 
     df = df.drop(['t_deal_probability', 't_activation_date', 't_item_id'] + ['i_sum_item_deal_probability', 'u_sum_user_deal_probability', 'isn_sum_isn_deal_probability', 'it1_sum_im1_deal_probability', 'pc_sum_pcat_deal_probability', 'ct_sum_city_deal_probability', 'c_sum_category_deal_probability', 'ut_sum_usertype_deal_probability', 'r_sum_region_deal_probability'] + ['i_avg_item_deal_probability',
                                                                                                                                                                                                                                                                                                                                                                                       'it1_avg_im1_deal_probability',
                                                                                                                                                                                                                                                                                                                                                                                       'u_avg_user_deal_probability'], axis=1)
+    """
     x_train = df
     x_train = sparse.hstack([x_train.values.astype('float32'),
                              tfidf_title,
                              # tfidf_desc
                              ], format='csr')
-
+    """
+    x_train = tfidf_title
     logger.info('train data size {}'.format(x_train.shape))
     cv = KFold(n_splits=5, shuffle=True, random_state=871)
 
@@ -132,8 +134,8 @@ def train():
         all_pred = np.zeros(y_train.shape[0])
         for train, test in cv.split(x_train, y_train):
             cnt += 1
-            trn_x = x_train[[i for i in range(x_train.shape[0]) if train[i]]]
-            val_x = x_train[[i for i in range(x_train.shape[0]) if test[i]]]
+            trn_x = x_train[train]
+            val_x = x_train[test]
             trn_y = y_train[train]
             val_y = y_train[test]
 
@@ -223,7 +225,7 @@ def predict():
                     # fast_max_data_title,
                     # nn_data,
                     # img_data
-                    ], axis=1)
+                    ], axis=1).fillna(-1)
     with open('test_tfidf.pkl', 'rb') as f:
         tfidf_title = pickle.load(f)  # .tocsc()
         cols = pd.read_csv('tfidf_cols4.csv')['col'].values
@@ -232,7 +234,7 @@ def predict():
     logger.info('data size {}'.format(df.shape))
 
     x_test = df[[col for col in usecols if 'tfidf' not in col]]
-    x_test = sparse.hstack([x_test.values.astype('float32'), tfidf_title], format='csr')
+    x_test = tfidf_title  # sparse.hstack([x_test.values.astype('float32'), tfidf_title], format='csr')
 
     logger.info('test load end')
 
@@ -267,6 +269,6 @@ if __name__ == '__main__':
     logger.setLevel(DEBUG)
     logger.addHandler(handler)
 
-    train()
+    # train()
     # train2()
     predict()

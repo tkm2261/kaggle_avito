@@ -26,8 +26,9 @@ print(DIR)
 
 def cst_metric_xgb(pred, dtrain):
     label = dtrain.get_label().astype(np.int)
-    sc = np.sqrt(mean_squared_error(label, pred.clip(0, 1)))
-    return 'rmse_clip', sc, True
+    sc1 = np.sqrt(mean_squared_error(label, pred))
+    sc = 100  # np.sqrt(mean_squared_error(label, pred.clip(0, 1)))
+    return 'rmse_clip', max(sc1, sc), False
 
 
 def callback(data):
@@ -52,17 +53,48 @@ from scipy import sparse
 def train():
 
     # df = load_train_data()  # .sample(10000000, random_state=42).reset_index(drop=True)
-    df = pd.read_csv('train_0526.csv', parse_dates=['t_activation_date'])
+    df = pd.read_feather('train_0602.ftr')  # , parse_dates=['t_activation_date'], float_precision='float32')
+    for col in df:
+        if df[col].dtype != object and col not in ('t_data_id', 't_activation_date'):
+            df[col] = df[col].astype('float32')
+    gc.collect()
+    y_train = df['t_deal_probability'].values
+    df.drop(['t_deal_probability'], axis=1, errors='ignore', inplace=True)
 
     train = df['t_activation_date'] < '2017-03-26'
     test = df['t_activation_date'] >= '2017-03-26'
     #train, test = train_test_split(np.arange(df.shape[0]), test_size=0.1, random_state=42)
+    df.drop(['t_activation_date', 't_item_id'] + ['i_sum_item_deal_probability', 'u_sum_user_deal_probability', 'isn_sum_isn_deal_probability', 'it1_sum_im1_deal_probability', 'pc_sum_pcat_deal_probability', 'ct_sum_city_deal_probability',
+                                                  'c_sum_category_deal_probability', 'ut_sum_usertype_deal_probability', 'r_sum_region_deal_probability'] + ['i_avg_item_deal_probability', 'it1_avg_im1_deal_probability', 'u_avg_user_deal_probability'] + ['ui_avg_user_deal_probability', 'ir_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'uit_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'iit_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'uca_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'ic_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'uu_avg_user_deal_probability'
+
+                                                                                                                                                                                                                                                              'ip_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'ica_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'ii_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'up_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'ur_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'uc_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'ip_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'uu_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'iu_avg_user_deal_probability'
+                                                                                                                                                                                                                                                              ], axis=1, errors='ignore', inplace=True)
+
+    df_cols = pd.read_csv('result_0601_useritemcols/feature_importances.csv')
+    drop_cols = df_cols[df_cols['imp'] == 0]['col'].values
+    df.drop(drop_cols, axis=1, errors='ignore', inplace=True)
+    gc.collect()
 
     tx_data = pd.read_csv('train2.csv')
-    tx_data = tx_data[[col for col in tx_data if "description" in col or "text_feat" in col or "title" in col]
-                      ]
-    # img_data = sparse.load_npz('features.npz').todense()
-    # img_data = pd.DataFrame(img_data, columns=[f'vgg16_{i}' for i in range(img_data.shape[1])])
+    tx_data = tx_data[[col for col in tx_data if "description" in col or "text_feat" in col or "title" in col]]
+    # with open('result_0527_ridge/train_cv_tmp.pkl', 'rb') as f:
+    #    df['ridge'] = pickle.load(f)  # .tocsc()
+
+    #img_data = sparse.load_npz('features.npz').todense()
+    #img_data = pd.DataFrame(img_data, columns=[f'vgg16_{i}' for i in range(img_data.shape[1])])
     # with open('nn_train.pkl', 'rb') as f:
     #    _nn_data = pickle.load(f)
     # nn_data = pd.DataFrame(_nn_data, columns=[f'nn_{i}' for i in range(_nn_data.shape[1])])
@@ -71,12 +103,10 @@ def train():
         tfidf_title = pickle.load(f)  # .tocsc()
         cols = pd.read_csv('tfidf_cols4.csv')['col'].values
         tfidf_title = tfidf_title[:, cols].tocsr()
-    """
-    with open('train_tfidf_desc.pkl', 'rb') as f:
-        tfidf = pickle.load(f)  # .tocsc()
-        cols = pd.read_csv('tfidf_desc_cols.csv')['col'].values
-        tfidf_desc = tfidf[:, cols].tocsr()
-    """
+    # with open('train_tfidf_desc.pkl', 'rb') as f:
+    #    tfidf = pickle.load(f)  # .tocsc()
+    #    cols = pd.read_csv('tfidf_desc_cols.csv')['col'].values
+    #    tfidf_desc = tfidf[:, cols].tocsr()
     # with open('nn_train_chargram.pkl', 'rb') as f:
     #    _nn_data = pickle.load(f)
     # nn_data_chargram = pd.DataFrame(_nn_data, columns=[f'nn_chargram_{i}' for i in range(_nn_data.shape[1])])
@@ -87,29 +117,31 @@ def train():
     # with open('../fasttext/fast_max_train_desc.pkl', 'rb') as f:
     #    fast_data = np.array(pickle.load(f), dtype='float32')
     # fast_max_data_desc = pd.DataFrame(fast_data, columns=[f'fast_desc_{i}' for i in range(fast_data.shape[1])])
+    """
     df = pd.concat([df,
                     tx_data,
                     # fast_max_data_title,
                     # nn_data,
                     # img_data
                     ], axis=1)
-    y_train = df['t_deal_probability'].values
-
-    df = df.drop(['t_deal_probability', 't_activation_date', 't_item_id'] + ['i_sum_item_deal_probability', 'u_sum_user_deal_probability', 'isn_sum_isn_deal_probability', 'it1_sum_im1_deal_probability', 'pc_sum_pcat_deal_probability', 'ct_sum_city_deal_probability', 'c_sum_category_deal_probability', 'ut_sum_usertype_deal_probability', 'r_sum_region_deal_probability'] + ['i_avg_item_deal_probability',
-                                                                                                                                                                                                                                                                                                                                                                                      'it1_avg_im1_deal_probability',
-                                                                                                                                                                                                                                                                                                                                                                                      'u_avg_user_deal_probability'], axis=1)
-    x_train = df
-    x_train = sparse.hstack([x_train.values.astype('float32'),
+    del tx_data
+    gc.collect()
+    """
+    logger.info(f'train df size {df.shape}')
+    x_train = df.values.astype('float32')
+    x_train = sparse.hstack([x_train,
                              tfidf_title,
                              # tfidf_desc
                              ], format='csr')
-
-    logger.info('train data size {}'.format(x_train.shape))
-    cv = KFold(n_splits=5, shuffle=True, random_state=871)
-
     usecols = df.columns.values.tolist() + [f'tfidf_title_{i}' for i in range(tfidf_title.shape[1])]
     #          + [f'tfidf_desc_{i}' for i in range(tfidf_desc.shape[1])]
     # usecols = list(range(x_train.shape[1]))
+
+    del df
+    gc.collect()
+
+    logger.info('train data size {}'.format(x_train.shape))
+    cv = KFold(n_splits=5, shuffle=True, random_state=871)
 
     with open(DIR + 'usecols.pkl', 'wb') as f:
         pickle.dump(usecols, f, -1)
@@ -133,8 +165,12 @@ def train():
                   #'device': ['gpu'],
                   }
     """
-    #_params = {'colsample_bytree': 0.7, 'learning_rate': 0.1, 'max_bin': 255, 'max_depth': -1, 'metric': 'rmse', 'min_child_weight': 5, 'min_split_gain': 0, 'num_leaves': 255, 'objective': 'regression_l2', 'reg_alpha': 1, 'scale_pos_weight': 1, 'seed': 114, 'subsample': 1, 'subsample_freq': 1, 'verbose': -1}
+    """
+    _params = {'colsample_bytree': 0.7, 'learning_rate': 0.1, 'max_bin': 255, 'max_depth': -1, 'min_child_weight': 5, 'min_split_gain': 0,
+               'num_leaves': 255, 'objective': 'regression_l2', 'reg_alpha': 1, 'scale_pos_weight': 1, 'seed': 114, 'subsample': 1, 'subsample_freq': 1, 'verbose': -1, 'metric': 'rmse'}
+    """
     _params = {
+        'min_child_weight': 5,
         'boosting_type': 'gbdt',
         'objective': 'regression',
         # 'max_depth': 15,
@@ -143,7 +179,9 @@ def train():
         'bagging_fraction': 0.85,
         # 'bagging_freq': 5,
         'learning_rate': 0.02,
+        'metric': 'rmse'
     }
+
     all_params = {p: [v] for p, v in _params.items()}
     use_score = 0
     min_score = (100, 100, 100)
@@ -155,8 +193,8 @@ def train():
         all_pred = np.zeros(y_train.shape[0])
         for train, test in cv.split(x_train, y_train):
             cnt += 1
-            trn_x = x_train[[i for i in range(x_train.shape[0]) if train[i]]]
-            val_x = x_train[[i for i in range(x_train.shape[0]) if test[i]]]
+            trn_x = x_train[train]  # [[i for i in range(x_train.shape[0]) if train[i]]]
+            val_x = x_train[test]  # [[i for i in range(x_train.shape[0]) if test[i]]]
             trn_y = y_train[train]
             val_y = y_train[test]
             train_data = lgb.Dataset(trn_x,  # .values.astype(np.float32),
@@ -171,10 +209,10 @@ def train():
             gc.collect()
             clf = lgb.train(params,
                             train_data,
-                            20000,  # params['n_estimators'],
+                            100000,  # params['n_estimators'],
                             early_stopping_rounds=30,
                             valid_sets=[test_data],
-                            feval=cst_metric_xgb,
+                            # feval=cst_metric_xgb,
                             # callbacks=[callback],
                             verbose_eval=10
                             )
@@ -201,6 +239,7 @@ def train():
             with open(DIR + 'model_%s.pkl' % cnt, 'wb') as f:
                 pickle.dump(clf, f, -1)
             gc.collect()
+            break
         with open(DIR + 'train_cv_tmp.pkl', 'wb') as f:
             pickle.dump(all_pred, f, -1)
 
@@ -264,6 +303,125 @@ def train():
     logger.info('save end')
 
 
+def train2():
+
+    # df = load_train_data()  # .sample(10000000, random_state=42).reset_index(drop=True)
+    df = pd.read_feather('train_0602.ftr')  # , parse_dates=['t_activation_date'], float_precision='float32')
+    for col in df:
+        if df[col].dtype != object and col not in ('t_data_id', 't_activation_date'):
+            df[col] = df[col].astype('float32')
+    gc.collect()
+    y_train = df['t_deal_probability'].values
+    df.drop(['t_deal_probability'], axis=1, errors='ignore', inplace=True)
+
+    train = df['t_activation_date'] < '2017-03-26'
+    test = df['t_activation_date'] >= '2017-03-26'
+    #train, test = train_test_split(np.arange(df.shape[0]), test_size=0.1, random_state=42)
+    df.drop(['t_activation_date', 't_item_id'] + ['i_sum_item_deal_probability', 'u_sum_user_deal_probability', 'isn_sum_isn_deal_probability', 'it1_sum_im1_deal_probability', 'pc_sum_pcat_deal_probability', 'ct_sum_city_deal_probability',
+                                                  'c_sum_category_deal_probability', 'ut_sum_usertype_deal_probability', 'r_sum_region_deal_probability'] + ['i_avg_item_deal_probability', 'it1_avg_im1_deal_probability', 'u_avg_user_deal_probability'] + ['ui_avg_user_deal_probability', 'ir_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'uit_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'iit_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'uca_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'ic_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'uu_avg_user_deal_probability'
+
+                                                                                                                                                                                                                                                              'ip_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'ica_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'ii_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'up_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'ur_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'uc_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'ip_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'uu_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'iu_avg_user_deal_probability'
+                                                                                                                                                                                                                                                              ], axis=1, errors='ignore', inplace=True)
+
+    df_cols = pd.read_csv('result_0601_useritemcols/feature_importances.csv')
+    drop_cols = df_cols[df_cols['imp'] == 0]['col'].values
+    df.drop(drop_cols, axis=1, errors='ignore', inplace=True)
+    gc.collect()
+
+    tx_data = pd.read_csv('train2.csv')
+    tx_data = tx_data[[col for col in tx_data if "description" in col or "text_feat" in col or "title" in col]]
+    # with open('result_0527_ridge/train_cv_tmp.pkl', 'rb') as f:
+    #    df['ridge'] = pickle.load(f)  # .tocsc()
+
+    #img_data = sparse.load_npz('features.npz').todense()
+    #img_data = pd.DataFrame(img_data, columns=[f'vgg16_{i}' for i in range(img_data.shape[1])])
+    # with open('nn_train.pkl', 'rb') as f:
+    #    _nn_data = pickle.load(f)
+    # nn_data = pd.DataFrame(_nn_data, columns=[f'nn_{i}' for i in range(_nn_data.shape[1])])
+
+    with open('train_tfidf.pkl', 'rb') as f:
+        tfidf_title = pickle.load(f)  # .tocsc()
+        cols = pd.read_csv('tfidf_cols4.csv')['col'].values
+        tfidf_title = tfidf_title[:, cols].tocsr()
+    # with open('train_tfidf_desc.pkl', 'rb') as f:
+    #    tfidf = pickle.load(f)  # .tocsc()
+    #    cols = pd.read_csv('tfidf_desc_cols.csv')['col'].values
+    #    tfidf_desc = tfidf[:, cols].tocsr()
+    # with open('nn_train_chargram.pkl', 'rb') as f:
+    #    _nn_data = pickle.load(f)
+    # nn_data_chargram = pd.DataFrame(_nn_data, columns=[f'nn_chargram_{i}' for i in range(_nn_data.shape[1])])
+
+    # with open('../fasttext/fast_max_train_title.pkl', 'rb') as f:
+    #    fast_data = np.array(pickle.load(f), dtype='float32')
+    # fast_max_data_title = pd.DataFrame(fast_data, columns=[f'fast_title_{i}' for i in range(fast_data.shape[1])])
+    # with open('../fasttext/fast_max_train_desc.pkl', 'rb') as f:
+    #    fast_data = np.array(pickle.load(f), dtype='float32')
+    # fast_max_data_desc = pd.DataFrame(fast_data, columns=[f'fast_desc_{i}' for i in range(fast_data.shape[1])])
+    """
+    df = pd.concat([df,
+                    tx_data,
+                    # fast_max_data_title,
+                    # nn_data,
+                    # img_data
+                    ], axis=1)
+    del tx_data
+    gc.collect()
+    """
+    logger.info(f'train df size {df.shape}')
+    x_train = df.values.astype('float32')
+    x_train = sparse.hstack([x_train,
+                             tfidf_title,
+                             # tfidf_desc
+                             ], format='csr')
+    usecols = df.columns.values.tolist() + [f'tfidf_title_{i}' for i in range(tfidf_title.shape[1])]
+    #          + [f'tfidf_desc_{i}' for i in range(tfidf_desc.shape[1])]
+    # usecols = list(range(x_train.shape[1]))
+
+    del df
+    gc.collect()
+
+    logger.info('train data size {}'.format(x_train.shape))
+    trees = 3895
+    min_params = {'bagging_fraction': 0.85, 'boosting_type': 'gbdt', 'feature_fraction': 0.65, 'learning_rate': 0.02,
+                  'metric': 'rmse', 'min_child_weight': 5, 'num_leaves': 300, 'objective': 'regression', 'verbose': 1}
+    logger.info('all data size {}'.format(x_train.shape))
+
+    train_data = lgb.Dataset(x_train,
+                             label=y_train,
+                             feature_name=usecols
+                             )
+    del x_train
+    gc.collect()
+    logger.info('train start')
+    clf = lgb.train(min_params,
+                    train_data,
+                    int(trees * 1.1),
+                    valid_sets=[train_data],
+                    feval=cst_metric_xgb,
+                    verbose_eval=10
+                    )
+    logger.info('train end')
+    with open(DIR + 'model.pkl', 'wb') as f:
+        pickle.dump(clf, f, -1)
+    # del x_train
+    gc.collect()
+
+    logger.info('save end')
+
+
 def predict():
     with open(DIR + 'model.pkl', 'rb') as f:
         clf = pickle.load(f)
@@ -279,9 +437,12 @@ def predict():
     logger.info('imp use {} {}'.format(imp[imp.imp > 0].shape, n_features))
 
     # df = load_test_data()
-    df = pd.read_csv('test_0526.csv', parse_dates=['t_activation_date'])
+    df = pd.read_feather('test_0602.ftr')  # , parse_dates=['t_activation_date'])
     tx_data = pd.read_csv('test2.csv')
     tx_data = tx_data[[col for col in tx_data if "description" in col or "text_feat" in col or "title" in col]]
+
+    with open('result_0527_ridge/test_tmp_pred.pkl', 'rb') as f:
+        df['ridge'] = pickle.load(f)  # .tocsc()
 
     # with open('nn_test.pkl', 'rb') as f:
     #    _nn_data = pickle.load(f)
@@ -297,6 +458,10 @@ def predict():
     # with open('../fasttext/fast_max_test_desc.pkl', 'rb') as f:
     #    fast_data = np.array(pickle.load(f), dtype='float32')
     # fast_max_data_desc = pd.DataFrame(fast_data, columns=[f'fast_desc_{i}' for i in range(fast_data.shape[1])])
+
+    #img_data = sparse.load_npz('features_test.npz').todense()
+    #img_data = pd.DataFrame(img_data, columns=[f'vgg16_{i}' for i in range(img_data.shape[1])])
+
     df = pd.concat([df,
                     tx_data,
                     # fast_max_data_title,
