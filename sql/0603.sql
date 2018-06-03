@@ -680,7 +680,7 @@ SELECT
 t.*,
 i.*, u.*, c.*, ct.*, isn.*, pc.*, r.*, ut.*, it1.*
 FROM
-avito.train_test
+[avito.train_test]
 LEFT OUTER JOIN avito.dmt_item_periods as p
 ON t.item_id = p.item_id
 LEFT OUTER JOIN avito.dmt_item as i
@@ -706,13 +706,13 @@ ON t.image_top_1 = it1.image_top_1
 SELECT
 *
 FROM
-`avito.train_test3`
+`avito.train_test2`
 WHERE
 t_deal_probability is not null
 
 -- avito.dmt_test
 SELECT
 *FROM
-`avito.train_test3`
+`avito.train_test2`
 WHERE
 t_deal_probability is null and data_id is not null
