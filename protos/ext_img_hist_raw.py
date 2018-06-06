@@ -13,6 +13,7 @@ from threading import Thread
 from queue import Queue
 import gc
 
+
 fname = '/home/takamisato/hdd/works/kaggle_avito/input/train_jpg.zip'
 n_channels = 3
 im_dim = 92
@@ -35,6 +36,7 @@ def proc(item_id):
     hist_r, bins = np.histogram(r.ravel(), 32, [0, 256])
     hist_g, bins = np.histogram(g.ravel(), 32, [0, 256])
     hist_b, bins = np.histogram(b.ravel(), 32, [0, 256])
+
     if hist_r.sum() > 0:
         hist_r = hist_r.astype(float) / hist_r.sum()
     if hist_g.sum() > 0:
@@ -64,12 +66,14 @@ if __name__ == '__main__':
     n_items = Value('i', -1)  # Async number of items
     features = []
     # items_ids = []
+
     ids = pd.read_csv('../input/train.csv', usecols=['image'], nrows=limit)['image'].tolist()
     with Pool() as p:
         features = list(p.map(proc, tqdm(ids), chunksize=100))
     print('Concating matrix...')
     features = np.vstack(features)
     print(features)
+
     pd.DataFrame(features, columns=[f'img_hist_{i}' for i in range(features.shape[1])]).to_feather('train_img_hist.ftr')
     print('Saving matrix...')
     # with open('img_hist.pkl', 'wb') as f:
