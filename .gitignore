@@ -1,0 +1,7 @@
+*.csv
+*.pkl
+*~
+*.ftr
+result_*
+*.npz
+*.npy
