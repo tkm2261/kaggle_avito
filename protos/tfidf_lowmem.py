@@ -7,29 +7,28 @@ import pandas as pd
 import re
 import gc
 
-SPLIT = re.compile('\w+')
+SPLIT = re.compile('\s+')
 
 
-def preprocess(df: pd.DataFrame):
-    """    
-    df['title'] = df['title'].fillna('') + ' ' + df['parent_category_name'].fillna('')
-    """
-    df['description'] = df['description'].fillna('')
-    df['description'] = (df['description'].fillna('') + ' ' +
-                         df['region'].fillna('') + ' ' +
-                         df['city'].fillna('') + ' ' +
-                         df['category_name'].fillna('') + ' ' +
-                         df['param_1'].fillna('') + ' ' +
-                         df['param_2'].fillna('') + ' ' +
-                         df['param_3'].fillna('') + ' ' +
-                         df['user_type'].fillna('')
-                         )
+def preprocess(df, col):
+    if col == 'title':
+        df['title'] = df['title'].fillna('') + ' ' + df['parent_category_name'].fillna('')
+    else:
+        df['description'] = df['description'].fillna('')
+        df['description'] = (df['description'].fillna('') + ' ' +
+                             df['region'].fillna('') + ' ' +
+                             df['city'].fillna('') + ' ' +
+                             df['category_name'].fillna('') + ' ' +
+                             df['param_1'].fillna('') + ' ' +
+                             df['param_2'].fillna('') + ' ' +
+                             df['param_3'].fillna('') + ' ' +
+                             df['user_type'].fillna('')
+                             )
 
-    return df['description'].values  # df['title'].values  # , 'description']]
+    return df[col].values  # df['title'].values  # , 'description']]
 
 
-def make_spmat():
-    postfix = 'description'
+def make_spmat(postfix='description'):
 
     map_words = {}
     idx = 0
@@ -40,13 +39,13 @@ def make_spmat():
     #
     for path in tqdm(['../input/train.csv', '../input/test.csv', '../input/train_active.csv', '../input/test_active.csv']):
         df = pd.read_csv(path,
-                         usecols=[  # 'title',
-                             'description',
-                             'price', 'item_seq_number',
-                             # 'parent_category_name',
-                             'region', 'city', 'category_name', 'param_1', 'param_2', 'param_3', 'user_type'
-                         ])
-        rows = preprocess(df)
+                         usecols=['title',
+                                  'description',
+                                  'price', 'item_seq_number',
+                                  'parent_category_name',
+                                  'region', 'city', 'category_name', 'param_1', 'param_2', 'param_3', 'user_type'
+                                  ])
+        rows = preprocess(df, postfix)
         for row in tqdm(rows):
             for word, cnt in Counter(SPLIT.split(row)).most_common():
                 if word in map_words:
@@ -67,11 +66,10 @@ def make_spmat():
         pickle.dump(map_words, f, -1)
 
 
-def make_tfidf_split():
+def make_tfidf_split(postfix):
     train_num = pd.read_csv('../input/train.csv').shape[0]
     test_num = pd.read_csv('../input/test.csv').shape[0]
 
-    postfix = 'title'
     bow_matrix = sparse.load_npz(f'bow/bow_matrix_{postfix}.npz')
     print(bow_matrix.shape)
     idf_matrix = sparse.csr_matrix(bow_matrix)
@@ -86,5 +84,7 @@ def make_tfidf_split():
 
 
 if __name__ == '__main__':
-    # make_spmat()
-    make_tfidf_split()
+    for col in ['title', 'description']:
+        make_spmat(col)
+    for col in ['title', 'description']:
+        make_tfidf_split(col)
