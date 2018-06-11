@@ -32,20 +32,8 @@ def cst_metric_xgb(pred, dtrain):
     return 'rmse_clip', max(sc1, sc), False
 
 
-def callback(data):
-    if (data.iteration + 1) % 10 != 0:
-        return
-
-    clf = data.model
-    trn_data = clf.train_set
-    val_data = clf.valid_sets[0]
-    preds = [ele[2] for ele in clf.eval_valid(dummy) if ele[1] == 'dummy'][0]
-    preds = preds.reshape((21, -1)).T
-    preds = np.array([np.argmax(x) for x in preds], dtype=np.int)
-    labels = val_data.get_label().astype(np.int)
-    sc = log_loss(labels, preds)
-    sc2 = roc_auc_score(labels, preds)
-    logger.info('cal [{}] {} {}'.format(data.iteration + 1, sc, sc2))
+def dummy(pred, dtrain):
+    return 'dummy', pred, False
 
 
 from scipy import sparse
@@ -59,7 +47,9 @@ def train():
         if df[col].dtype != object and col not in ('t_data_id', 't_activation_date'):
             df[col] = df[col].astype(DTYPE)
     gc.collect()
-    y_train = df['t_deal_probability'].values
+    y_train_raw = df['t_deal_probability'].values
+    y_train = df['t_deal_probability'].values != 0
+
     df.drop(['t_deal_probability'], axis=1, errors='ignore', inplace=True)
 
     train = df['t_activation_date'] < '2017-03-26'
@@ -88,17 +78,12 @@ def train():
     drop_cols = df_cols[df_cols['imp'] == 0]['col'].values
     df.drop(drop_cols, axis=1, errors='ignore', inplace=True)
 
-    df_cols = pd.read_csv('result_0609_basemore/feature_importances.csv')
-    drop_cols = df_cols[df_cols['imp'] == 0]['col'].values
-    df.drop(drop_cols, axis=1, errors='ignore', inplace=True)
-
     gc.collect()
 
     tx_data = pd.read_csv('train2.csv')
     tx_data = tx_data[[col for col in tx_data if "description" in col or "text_feat" in col or "title" in col]]
-
-    # with open('result_0610_bin/train_cv_tmp.pkl', 'rb') as f:
-    #    df['bin_pred'] = pickle.load(f)  # .tocsc()
+    # with open('result_0527_ridge/train_cv_tmp.pkl', 'rb') as f:
+    #    df['ridge'] = pickle.load(f)  # .tocsc()
 
     #img_data = sparse.load_npz('features.npz').todense()
     #img_data = pd.DataFrame(img_data, columns=[f'vgg16_{i}' for i in range(img_data.shape[1])])
@@ -128,8 +113,7 @@ def train():
 
     df = pd.concat([df,
                     tx_data,
-                    pd.read_feather('train_img_baseinfo_more.ftr'),
-                    # vgg_data,
+                    pd.read_feather('train_img_baseinfo_more.ftr')
                     # fast_max_data_title,
                     # nn_data,
                     # img_data
@@ -168,7 +152,7 @@ def train():
         pickle.dump(usecols, f, -1)
 
     # {'colsample_bytree': 0.7, 'learning_rate': 0.1, 'max_bin': 255, 'max_depth': -1, 'metric': 'rmse', 'min_child_weight': 5, 'min_split_gain': 0, 'num_leaves': 255, 'objective': 'regression_l2', 'reg_alpha': 1, 'scale_pos_weight': 1, 'seed': 114, 'subsample': 1, 'subsample_freq': 1, 'verbose': -1}
-
+    """
     all_params = {'min_child_weight': [5],
                   'subsample': [1],
                   'subsample_freq': [1],
@@ -178,34 +162,33 @@ def train():
                   'max_depth': [-1],
                   'min_split_gain': [0],
                   'reg_alpha': [1],
-                  'max_bin': [511],
+                  'max_bin': [255],
                   'num_leaves': [255],
                   'objective': ['regression_l2'],
                   'scale_pos_weight': [1],
                   'verbose': [-1],
-                  'metric': ['rmse'],
                   # 'device': ['gpu'],
                   }
-
+    """
     """
     _params = {'colsample_bytree': 0.7, 'learning_rate': 0.1, 'max_bin': 255, 'max_depth': -1, 'min_child_weight': 5, 'min_split_gain': 0,
                'num_leaves': 255, 'objective': 'regression_l2', 'reg_alpha': 1, 'scale_pos_weight': 1, 'seed': 114, 'subsample': 1, 'subsample_freq': 1, 'verbose': -1, 'metric': 'rmse'}
     """
-    """
+
     min_params = {
         'min_child_weight': 5,
         'boosting_type': 'gbdt',
-        'objective': 'regression',
+        'objective': 'binary',
         # 'max_depth': 15,
         'num_leaves': 300,
         'feature_fraction': 0.65,
         'bagging_fraction': 0.85,
         # 'bagging_freq': 5,
-        'learning_rate': 0.02,  # 0.02
-        'metric': 'rmse'
+        'learning_rate': 0.1,  # 0.02
+        'metric': 'binary_logloss'
     }
     all_params = {p: [v] for p, v in min_params.items()}
-    """
+
     use_score = 0
     min_score = (100, 100, 100)
     for params in tqdm(list(ParameterGrid(all_params))):
@@ -220,6 +203,19 @@ def train():
             val_x = x_train[test]  # [[i for i in range(x_train.shape[0]) if test[i]]]
             trn_y = y_train[train]
             val_y = y_train[test]
+            val_y_raw = y_train_raw[test]
+
+            def callback(data):
+                if (data.iteration + 1) % 10 != 0:
+                    return
+
+                clf = data.model
+                val_data = clf.valid_sets[0]
+                preds = [ele[2] for ele in clf.eval_valid(dummy) if ele[1] == 'dummy'][0]
+                labels = val_y_raw
+                sc = np.sqrt(mean_squared_error(labels, preds.clip(0, 1)))
+                logger.info('cal [{}] {}'.format(data.iteration + 1, sc))
+
             train_data = lgb.Dataset(trn_x,  # .values.astype(np.float32),
                                      label=trn_y,
                                      feature_name=usecols
@@ -236,7 +232,7 @@ def train():
                             early_stopping_rounds=30,
                             valid_sets=[test_data],
                             # feval=cst_metric_xgb,
-                            # callbacks=[callback],
+                            callbacks=[callback],
                             verbose_eval=10
                             )
             pred = clf.predict(val_x).clip(0, 1)
@@ -262,7 +258,7 @@ def train():
             with open(DIR + 'model_%s.pkl' % cnt, 'wb') as f:
                 pickle.dump(clf, f, -1)
             gc.collect()
-            break
+            # break
         with open(DIR + 'train_cv_tmp.pkl', 'wb') as f:
             pickle.dump(all_pred, f, -1)
 
@@ -345,8 +341,8 @@ def predict():
     tx_data = pd.read_csv('test2.csv')
     tx_data = tx_data[[col for col in tx_data if "description" in col or "text_feat" in col or "title" in col]]
 
-    with open('result_0610_bin/test_tmp_pred.pkl', 'rb') as f:
-        df['bin_pred'] = pickle.load(f)  # .tocsc()
+    with open('result_0527_ridge/test_tmp_pred.pkl', 'rb') as f:
+        df['ridge'] = pickle.load(f)  # .tocsc()
 
     # with open('nn_test.pkl', 'rb') as f:
     #    _nn_data = pickle.load(f)
@@ -365,11 +361,9 @@ def predict():
 
     #img_data = sparse.load_npz('features_test.npz').todense()
     #img_data = pd.DataFrame(img_data, columns=[f'vgg16_{i}' for i in range(img_data.shape[1])])
-    #vgg_data = pd.read_csv('../data/vgg_feat_test_classify.csv').drop('Unnamed: 0', axis=1)
     df = pd.concat([df,
                     tx_data,
-                    pd.read_feather('test_img_baseinfo_more.ftr'),
-
+                    pd.read_feather('test_img_baseinfo_more.ftr')
                     # fast_max_data_title,
                     # nn_data,
                     # img_data

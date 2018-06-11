@@ -15,7 +15,7 @@ from queue import Queue
 import gc
 import os
 import operator
-from collections import defaultdict
+from collections import Counter
 from PIL import Image
 from scipy.stats import itemfreq
 from numba import jit
@@ -26,27 +26,28 @@ bar_iterval = 10  # in seconds
 empty_im = np.zeros((im_dim, im_dim, n_channels), dtype=np.uint8)  # Used when no image is present
 
 
-def _color_analysis(img):
+# @jit
+def color_analysis(img):
     # obtain the color palatte of the image
-    palatte = defaultdict(int)
-    for pixel in img.getdata():
-        palatte[pixel] += 1
 
-    # sort the colors present in the image
-    sorted_x = sorted(palatte.items(), key=operator.itemgetter(1), reverse=True)
-    light_shade, dark_shade, shade_count, pixel_limit = 0, 0, 0, 25
-    for i, x in enumerate(sorted_x[:pixel_limit]):
-        if all(xx <= 20 for xx in x[0][:3]):  # dull : too much darkness
-            dark_shade += x[1]
-        if all(xx >= 240 for xx in x[0][:3]):  # bright : too much whiteness
-            light_shade += x[1]
-        shade_count += x[1]
+    counter = Counter(img.getdata())
+    light_shade = 0
+    dark_shade = 0
+    shade_count = 0
+    pixel_limit = 25
+    for key, cnt in counter.most_common(pixel_limit):
+        if all(xx <= 20 for xx in key[:3]):  # dull : too much darkness
+            dark_shade += cnt
+        if all(xx >= 240 for xx in key[:3]):  # bright : too much whiteness
+            light_shade += cnt
+        shade_count += cnt
 
     light_percent = round((float(light_shade)/shade_count)*100, 2)
     dark_percent = round((float(dark_shade)/shade_count)*100, 2)
     return light_percent, dark_percent
 
 
+"""
 def perform_color_analysis(im):
     # cut the images into two halves as complete average may give bias results
     size = im.size
@@ -60,6 +61,7 @@ def perform_color_analysis(im):
     light_percent = (light_percent1 + light_percent2)/2
     dark_percent = (dark_percent1 + dark_percent2)/2
     return dark_percent, light_percent
+"""
 
 
 def get_average_pixel_width(im):
@@ -93,11 +95,17 @@ def get_blurrness_score(cv_img):
 
 
 def proc(item_id):
+    if os.path.exists(f'img_baseinfo/{item_id}'):
+        try:
+            np.loadtxt(f'img_baseinfo/{item_id}')
+            return
+        except:
+            print('cannot load', item_id)
 
-    zfile = '../input/train_jpg/{}.jpg'.format(item_id)
+    zfile = '../input/test_jpg/{}.jpg'.format(item_id)
     cv_img = cv2.imread(zfile)
     if cv_img is None:
-        return [0 for _ in range(15)]
+        ret = [-1 for _ in range(13)]
     else:
         img = Image.open(zfile)
 
@@ -109,37 +117,49 @@ def proc(item_id):
 
         size = os.path.getsize(zfile)
 
-        light_percent, dark_percent = perform_color_analysis(img)
+        light_percent, dark_percent = color_analysis(img)
         average_pixel_width = get_average_pixel_width(img)
-        #red_dom, green_dom, blue_dom = get_dominant_color(cv_img)
+        # red_dom, green_dom, blue_dom = get_dominant_color(cv_img)
         blurrness = get_blurrness_score(cv_img)
 
         ret = img_size + [mean_color] + [std_color] + color_stats.tolist() + [size] + \
             [light_percent, dark_percent, average_pixel_width, blurrness]
-        return ret
+    np.savetxt(f'img_baseinfo/{item_id}', np.array(ret, dtype='float32'))
 
 
 if __name__ == '__main__':
+    ids = pd.read_csv('../input/test.csv', usecols=['image'], nrows=limit)['image'].tolist()
+
     n_items = Value('i', -1)  # Async number of items
     features = []
     # items_ids = []
-    ids = pd.read_csv('../input/train.csv', usecols=['image'], nrows=limit)['image'].tolist()
+
     with Pool() as p:
-        features = list(p.map(proc, tqdm(ids), chunksize=100))
+        features = list(p.map(proc, tqdm(ids), chunksize=10))
     # features = [proc(i) for i in tqdm(ids)]  # list(map(proc, tqdm(ids)))
     print('Concating matrix...')
-    features = np.vstack(features)
+
+    tmp = []
+    for item_id in tqdm(ids):
+        im = np.loadtxt(f'img_baseinfo/{item_id}')
+        if im.shape[0] != 15:
+            im = np.zeros(15)
+        tmp.append(im)
+
+    features = np.vstack(tmp)
     print(features.shape)
 
     pd.DataFrame(features.astype('float32'), columns=['height', 'width', 'mean_color', 'std_color',
                                                       'color_stats_mean_r', 'color_stats_std_r',
                                                       'color_stats_mean_g', 'color_stats_std_g',
                                                       'color_stats_mean_b', 'color_stats_std_b',
-                                                      'size', 'light_percent', 'dark_percent', 'average_pixel_width',
-                                                      'blurrness']).to_feather('train_img_baseinfo_more.ftr')
+                                                      'size',
+                                                      'light_percent', 'dark_percent',
+                                                      'average_pixel_width',
+                                                      'blurrness']).to_feather('test_img_baseinfo_more.ftr')
     print('Saving matrix...')
     # with open('img_hist.pkl', 'wb') as f:
     #    pickle.dump(features, f, -1)
 
-    #np.savetxt('train_img_hist.npy', features)
-    #print('All done! Good luck')
+    # np.savetxt('test_img_hist.npy', features)
+    # print('All done! Good luck')

@@ -46,26 +46,27 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
 def train():
     vectorizer = make_union(
         on_field('title', Tfidf(max_features=1000000, min_df=5,
-                                #token_pattern='[\w\?,\.;:\(\)\[\]]+',
+                                # token_pattern='[\w\?,\.;:\(\)\[\]]+',
                                 token_pattern='\w+',
                                 stop_words=stops, ngram_range=(1, 2),
-                                #lowercase=True,
-                                #smooth_idf=False
+                                # lowercase=True,
+                                # smooth_idf=False
                                 )),
         on_field('description', Tfidf(max_features=1000000, min_df=5,
                                       lowercase=True,
-                                      #token_pattern='[\w\?,\.;:\(\)\[\]]+',
+                                      # token_pattern='[\w\?,\.;:\(\)\[\]]+',
                                       token_pattern='\w+',
                                       ngram_range=(1, 2),
-                                      #stop_words=stops,
-                                      #smooth_idf=False
-        )
+                                      # stop_words=stops,
+                                      # smooth_idf=False
+                                      )
                  ),
         n_jobs=4)
     df = pd.DataFrame()
     list_size = []
-    # 
-    for path in ['../input/train.csv', '../input/test.csv']: #, '../input/train_active.csv', '../input/test_active.csv']:
+    #
+    #
+    for path in ['../input/train.csv', '../input/test.csv', '../input/train_active.csv', '../input/test_active.csv']:
         _df = pd.read_csv(path,
                           usecols=['title',
                                    'description',
@@ -78,12 +79,12 @@ def train():
     data = vectorizer.fit_transform(preprocess(df)).astype(np.float32)
     X_train = data[:list_size[0], :]
     X_test = data[list_size[0]:list_size[0] + list_size[1], :]
-    with open('train_tfidf.pkl', 'wb') as f:
+    with open('train_tfidf_all.pkl', 'wb') as f:
         pickle.dump(X_train, f, -1)
-    with open('test_tfidf.pkl', 'wb') as f:
+    with open('test_tfidf_all.pkl', 'wb') as f:
         pickle.dump(X_test, f, -1)
 
-    with open('vectorizer_tfidf.pkl', 'wb') as f:
+    with open('vectorizer_tfidf_all.pkl', 'wb') as f:
         pickle.dump(vectorizer, f, -1)
 
 
