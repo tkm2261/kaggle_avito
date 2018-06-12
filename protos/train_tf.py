@@ -61,10 +61,8 @@ def train():
     y_train = df['t_deal_probability'].values
     df.drop(['t_deal_probability'], axis=1, errors='ignore', inplace=True)
     logger.info(f'train df size {df.shape}')
-    x_train = sparse.hstack([sparse.load_npz('bow/train_tfidf_matrix_title.npz'),
-                             sparse.load_npz('bow/train_tfidf_matrix_description.npz')
-                             ], format='csr')
-    usecols = [f'tfidf_title_{i}' for i in range(x_train.shape[1])]
+    x_train = pd.read_feather('train_teppei.ftr')
+    usecols = x_train.columns.values.tolist()
 
     del df
     gc.collect()
@@ -102,8 +100,8 @@ def train():
         all_pred = np.zeros(y_train.shape[0])
         for train, test in cv.split(x_train, y_train):
             cnt += 1
-            trn_x = x_train[train]  # [[i for i in range(x_train.shape[0]) if train[i]]]
-            val_x = x_train[test]  # [[i for i in range(x_train.shape[0]) if test[i]]]
+            trn_x = x_train.iloc[train]  # [[i for i in range(x_train.shape[0]) if train[i]]]
+            val_x = x_train.iloc[test]  # [[i for i in range(x_train.shape[0]) if test[i]]]
             trn_y = y_train[train]
             val_y = y_train[test]
             train_data = lgb.Dataset(trn_x,  # .values.astype(np.float32),
@@ -148,7 +146,7 @@ def train():
             with open(DIR + 'model_%s.pkl' % cnt, 'wb') as f:
                 pickle.dump(clf, f, -1)
             gc.collect()
-            break
+            # break
         with open(DIR + 'train_cv_tmp.pkl', 'wb') as f:
             pickle.dump(all_pred, f, -1)
 
@@ -226,53 +224,7 @@ def predict():
     imp.to_csv(DIR + 'feature_importances.csv')
     logger.info('imp use {} {}'.format(imp[imp.imp > 0].shape, n_features))
 
-    # df = load_test_data()
-    df = pd.read_feather('test_0602.ftr')  # , parse_dates=['t_activation_date'])
-    tx_data = pd.read_csv('test2.csv')
-    tx_data = tx_data[[col for col in tx_data if "description" in col or "text_feat" in col or "title" in col]]
-
-    with open('result_0527_ridge/test_tmp_pred.pkl', 'rb') as f:
-        df['ridge'] = pickle.load(f)  # .tocsc()
-
-    # with open('nn_test.pkl', 'rb') as f:
-    #    _nn_data = pickle.load(f)
-    # nn_data = pd.DataFrame(_nn_data, columns=[f'nn_{i}' for i in range(_nn_data.shape[1])])
-
-    # with open('nn_test_chargram.pkl', 'rb') as f:
-    #    _nn_data = pickle.load(f)
-    # nn_data_chargram = pd.DataFrame(_nn_data, columns=[f'nn_chargram_{i}' for i in range(_nn_data.shape[1])])
-
-    # with open('../fasttext/fast_max_test_title.pkl', 'rb') as f:
-    #    fast_data = np.array(pickle.load(f), dtype='float32')
-    # fast_max_data_title = pd.DataFrame(fast_data, columns=[f'fast_title_{i}' for i in range(fast_data.shape[1])])
-    # with open('../fasttext/fast_max_test_desc.pkl', 'rb') as f:
-    #    fast_data = np.array(pickle.load(f), dtype='float32')
-    # fast_max_data_desc = pd.DataFrame(fast_data, columns=[f'fast_desc_{i}' for i in range(fast_data.shape[1])])
-
-    #img_data = sparse.load_npz('features_test.npz').todense()
-    #img_data = pd.DataFrame(img_data, columns=[f'vgg16_{i}' for i in range(img_data.shape[1])])
-
-    df = pd.concat([df,
-                    tx_data,
-                    # fast_max_data_title,
-                    # nn_data,
-                    # img_data
-                    ], axis=1)
-    with open('test_tfidf.pkl', 'rb') as f:
-        tfidf_title = pickle.load(f)  # .tocsc()
-        cols = pd.read_csv('tfidf_cols4.csv')['col'].values
-        tfidf_title = tfidf_title[:, cols].tocsr()
-
-    logger.info('data size {}'.format(df.shape))
-
-    # for col in usecols:
-    #    if col not in df.columns.values:
-    #        df[col] = np.zeros(df.shape[0])
-    #        logger.info('no col %s' % col)
-
-    x_test = df[[col for col in usecols if 'tfidf' not in col]]
-    x_test = sparse.hstack([x_test.values.astype('float32'), tfidf_title], format='csr')
-
+    x_test = pd.read_feather('test_teppei.ftr')
     if x_test.shape[1] != n_features:
         raise Exception('Not match feature num: %s %s' % (x_test.shape[1], n_features))
 
