@@ -21,16 +21,16 @@ from tqdm import tqdm
 from load_data import load_train_data, load_test_data
 import sys
 DIR = 'result_tmp/'  # sys.argv[1]  # 'result_1008_rate001/'
+DTYPE = 'float32'
 print(DIR)
-
-DTYPE = 'float16'
+print(DTYPE)
 
 
 def cst_metric_xgb(pred, dtrain):
     label = dtrain.get_label().astype(np.int)
     sc1 = np.sqrt(mean_squared_error(label, pred))
     sc = 100  # np.sqrt(mean_squared_error(label, pred.clip(0, 1)))
-    return 'rmse_clip', max(sc1, sc), False
+    return 'rmse_clip', sc1, False
 
 
 def callback(data):
@@ -55,7 +55,7 @@ from scipy import sparse
 def train():
 
     # df = load_train_data()  # .sample(10000000, random_state=42).reset_index(drop=True)
-    df = pd.read_feather('train_0602.ftr')  # , parse_dates=['t_activation_date'], float_precision='float32')
+    df = pd.read_feather('train_0612.ftr')  # , parse_dates=['t_activation_date'], float_precision='float32')
     #cols = [col for col in df if df[col].dtype != object and col not in ('t_data_id', 't_activation_date')]
     #df[cols] = df[cols].astype(DTYPE)
     gc.collect()
@@ -94,6 +94,11 @@ def train():
     df_cols = pd.read_csv('result_0611_rate001/feature_importances.csv')
     drop_cols = df_cols[df_cols['imp'] == 0]['col'].values
     df.drop(drop_cols, axis=1, errors='ignore', inplace=True)
+
+    df_cols = pd.read_csv('result_0615_exif/feature_importances.csv')
+    drop_cols = df_cols[df_cols['imp'] == 0]['col'].values
+    df.drop(drop_cols, axis=1, errors='ignore', inplace=True)
+
     logger.info(f'load dropcols {df.shape}')
     gc.collect()
 
@@ -102,8 +107,8 @@ def train():
     logger.info(f'load tx_data {tx_data.shape}')
     # with open('result_tf_tmp/train_cv_tmp.pkl', 'rb') as f:
     #    df['teppei_pred'] = pickle.load(f)  # .tocsc()
-    with open('train_dnn.pkl', 'rb') as f:
-        df['densenet_pred'] = pickle.load(f)  # .tocsc()
+    # with open('train_dnn.pkl', 'rb') as f:
+    #    df['densenet_pred'] = pickle.load(f)  # .tocsc()
     """
     img_data = pd.read_feather('train_teppei.ftr').fillna(0).astype(DTYPE)
     n_dim = 64
@@ -121,7 +126,7 @@ def train():
 
     with open('train_tfidf.pkl', 'rb') as f:
         tfidf_title = pickle.load(f)  # .tocsc()
-        cols = pd.read_csv('tfidf_cols4.csv')['col'].values
+        cols = pd.read_csv('tfidf_cols5.csv')['col'].values
         tfidf_title = tfidf_title[:, cols].tocsc()
     logger.info(f'load tfidf_data {tfidf_title.shape}')
     # with open('train_tfidf_desc.pkl', 'rb') as f:
@@ -141,21 +146,22 @@ def train():
     df = pd.concat([df,
                     tx_data,
                     pd.read_feather('train_img_baseinfo_more.ftr'),
+                    pd.read_feather('train_img_exif.ftr'),
                     # vgg_data,
                     # fast_max_data_title,
                     # nn_data,
                     # img_data
-                    ], axis=1, copy=False)
+                    ], axis=1, copy=False).astype(DTYPE)
     del tx_data
 
     gc.collect()
     logger.info(f'load df {df.shape}')
-    """
-    cols = pd.read_csv('result_tf_0607/tfidf_cols2.csv')['col'].values
-    tfidf2 = sparse.hstack([sparse.load_npz('result_tf_0607/train_tfidf_matrix_title.npz'),
-                            sparse.load_npz('result_tf_0607/train_tfidf_matrix_description.npz')
-                            ], format='csr', dtype=DTYPE)[:, cols]
-    """
+
+    #cols = pd.read_csv('result_tf_0607/tfidf_cols2.csv')['col'].values
+    # tfidf2 = sparse.hstack([sparse.load_npz('result_tf_0607/train_tfidf_matrix_title.npz'),
+    #                        sparse.load_npz('result_tf_0607/train_tfidf_matrix_description.npz')
+    #                        ], format='csr', dtype=DTYPE)[:, cols]
+
     x_train = df.values  # sparse.csc_matrix(df.values, dtype=DTYPE)
 
     x_train = sparse.hstack([x_train,
@@ -180,18 +186,18 @@ def train():
         pickle.dump(usecols, f, -1)
 
     #{'boosting_type': 'gbdt', 'colsample_bytree': 0.8, 'learning_rate': 0.1, 'max_bin': 255, 'max_depth': -1, 'metric': 'rmse', 'min_child_weight': 5, 'min_split_gain': 0, 'num_leaves': 255, 'objective': 'regression_l2', 'reg_alpha': 1, 'scale_pos_weight': 1, 'seed': 114, 'subsample': 1, 'subsample_freq': 1, 'verbose': -1}
-    all_params = {'min_child_weight': [5],
-                  'subsample': [1],
+    all_params = {'min_child_weight': [3, 5, 10],
+                  'subsample': [0.9],
                   'subsample_freq': [1],
                   'seed': [114],
                   'colsample_bytree': [0.8],
-                  'learning_rate': [0.02],
+                  'learning_rate': [0.1],
                   'max_depth': [-1],
-                  'min_split_gain': [0],
+                  'min_split_gain': [0, 0.01],
                   'reg_alpha': [1],
                   'max_bin': [255],
-                  'num_leaves': [255],
-                  'objective': ['regression_l2'],
+                  'num_leaves': [255, 311],
+                  'objective': ['xentropy'],
                   'scale_pos_weight': [1],
                   'verbose': [-1],
                   'boosting_type': ['gbdt'],
@@ -326,7 +332,6 @@ def train():
                     train_data,
                     int(trees * 1.1),
                     valid_sets=[train_data],
-                    feval=cst_metric_xgb,
                     verbose_eval=10
                     )
     logger.info('train end')
@@ -353,12 +358,9 @@ def predict():
     logger.info('imp use {} {}'.format(imp[imp.imp > 0].shape, n_features))
 
     # df = load_test_data()
-    df = pd.read_feather('test_0602.ftr')  # , parse_dates=['t_activation_date'])
+    df = pd.read_feather('test_0612.ftr')  # , parse_dates=['t_activation_date'])
     tx_data = pd.read_csv('test2.csv')
     tx_data = tx_data[[col for col in tx_data if "description" in col or "text_feat" in col or "title" in col]]
-
-    with open('result_tf_tmp/test_tmp_pred.pkl', 'rb') as f:
-        df['teppei_pred'] = pickle.load(f)  # .tocsc()
 
     # with open('nn_test.pkl', 'rb') as f:
     #    _nn_data = pickle.load(f)
@@ -387,8 +389,8 @@ def predict():
     #vgg_data = pd.read_csv('../data/vgg_feat_test_classify.csv').drop('Unnamed: 0', axis=1)
     df = pd.concat([df,
                     tx_data,
+                    pd.read_feather('test_img_exif.ftr'),
                     pd.read_feather('test_img_baseinfo_more.ftr'),
-
                     # fast_max_data_title,
                     # nn_data,
                     # img_data
@@ -396,7 +398,7 @@ def predict():
 
     with open('test_tfidf.pkl', 'rb') as f:
         tfidf_title = pickle.load(f)  # .tocsc()
-        cols = pd.read_csv('tfidf_cols4.csv')['col'].values
+        cols = pd.read_csv('tfidf_cols5.csv')['col'].values
         tfidf_title = tfidf_title[:, cols].tocsr()
     """
     cols = pd.read_csv('result_tf_0607/tfidf_cols.csv')['col'].values
@@ -454,5 +456,4 @@ if __name__ == '__main__':
     logger.addHandler(handler)
 
     train()
-    # train2()
     predict()
