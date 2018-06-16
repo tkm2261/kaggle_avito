@@ -64,24 +64,11 @@ def train():
     df.drop(['t_deal_probability'], axis=1, errors='ignore', inplace=True)
 
     #train, test = train_test_split(np.arange(df.shape[0]), test_size=0.1, random_state=42)
-    df.drop(['t_activation_date', 't_item_id'] + ['i_sum_item_deal_probability', 'u_sum_user_deal_probability', 'isn_sum_isn_deal_probability', 'it1_sum_im1_deal_probability', 'pc_sum_pcat_deal_probability', 'ct_sum_city_deal_probability',
-                                                  'c_sum_category_deal_probability', 'ut_sum_usertype_deal_probability', 'r_sum_region_deal_probability'] + ['i_avg_item_deal_probability', 'it1_avg_im1_deal_probability', 'u_avg_user_deal_probability'] + ['ui_avg_user_deal_probability', 'ir_avg_user_deal_probability',
-                                                                                                                                                                                                                                                              'uit_avg_user_deal_probability',
-                                                                                                                                                                                                                                                              'iit_avg_user_deal_probability',
-                                                                                                                                                                                                                                                              'uca_avg_user_deal_probability',
-                                                                                                                                                                                                                                                              'ic_avg_user_deal_probability',
-                                                                                                                                                                                                                                                              'uu_avg_user_deal_probability'
+    df.drop(['t_activation_date', 't_item_id'], axis=1, errors='ignore', inplace=True)
 
-                                                                                                                                                                                                                                                              'ip_avg_user_deal_probability',
-                                                                                                                                                                                                                                                              'ica_avg_user_deal_probability',
-                                                                                                                                                                                                                                                              'ii_avg_user_deal_probability',
-                                                                                                                                                                                                                                                              'up_avg_user_deal_probability',
-                                                                                                                                                                                                                                                              'ur_avg_user_deal_probability',
-                                                                                                                                                                                                                                                              'uc_avg_user_deal_probability',
-                                                                                                                                                                                                                                                              'ip_avg_user_deal_probability',
-                                                                                                                                                                                                                                                              'uu_avg_user_deal_probability',
-                                                                                                                                                                                                                                                              'iu_avg_user_deal_probability'
-                                                                                                                                                                                                                                                              ], axis=1, errors='ignore', inplace=True)
+    drop_cols = ['ur_avg_user_deal_probability', 'up_avg_user_deal_probability', 'uit_avg_user_deal_probability', 'ii_avg_user_deal_probability', 'ica_avg_user_deal_probability', 'uc_avg_user_deal_probability', 'ic_avg_user_deal_probability', 'ui_avg_user_deal_probability',
+                 'i_avg_item_deal_probability', 'iu_avg_user_deal_probability', 'u_avg_user_deal_probability', 'iit_avg_user_deal_probability', 'uca_avg_user_deal_probability', 'uu_avg_user_deal_probability', 'ir_avg_user_deal_probability', 'ip_avg_user_deal_probability']
+    df.drop(drop_cols, axis=1, inplace=True)
 
     df_cols = pd.read_csv('result_0601_useritemcols/feature_importances.csv')
     drop_cols = df_cols[df_cols['imp'] == 0]['col'].values
@@ -186,21 +173,21 @@ def train():
         pickle.dump(usecols, f, -1)
 
     #{'boosting_type': 'gbdt', 'colsample_bytree': 0.8, 'learning_rate': 0.1, 'max_bin': 255, 'max_depth': -1, 'metric': 'rmse', 'min_child_weight': 5, 'min_split_gain': 0, 'num_leaves': 255, 'objective': 'regression_l2', 'reg_alpha': 1, 'scale_pos_weight': 1, 'seed': 114, 'subsample': 1, 'subsample_freq': 1, 'verbose': -1}
-    all_params = {'min_child_weight': [3, 5, 10],
+    all_params = {'min_child_weight': [3],
                   'subsample': [0.9],
                   'subsample_freq': [1],
                   'seed': [114],
                   'colsample_bytree': [0.8],
-                  'learning_rate': [0.1],
+                  'learning_rate': [0.02],
                   'max_depth': [-1],
-                  'min_split_gain': [0, 0.01],
+                  'min_split_gain': [0.01],
                   'reg_alpha': [1],
                   'max_bin': [255],
-                  'num_leaves': [255, 311],
+                  'num_leaves': [255],
                   'objective': ['xentropy'],
                   'scale_pos_weight': [1],
                   'verbose': [-1],
-                  'boosting_type': ['gbdt'],
+                  'boosting_type': ['dart'],
                   'metric': ['rmse'],
                   # 'device': ['gpu'],
                   }
@@ -251,7 +238,7 @@ def train():
             clf = lgb.train(params,
                             train_data,
                             100000,  # params['n_estimators'],
-                            early_stopping_rounds=30,
+                            early_stopping_rounds=100,
                             valid_sets=[test_data],
                             # feval=cst_metric_xgb,
                             # callbacks=[callback],
