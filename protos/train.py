@@ -68,7 +68,9 @@ def train():
     df.drop(['t_deal_probability'], axis=1, errors='ignore', inplace=True)
 
     #train, test = train_test_split(np.arange(df.shape[0]), test_size=0.1, random_state=42)
-    df.drop(['t_activation_date', 't_item_id'], axis=1, errors='ignore', inplace=True)
+    df['t_activation_date'] = pd.to_datetime(df['t_activation_date']).apply(lambda x: x.timestamp())
+
+    #df.drop(['t_activation_date', 't_item_id'], axis=1, errors='ignore', inplace=True)
 
     drop_cols = ['ur_avg_user_deal_probability', 'up_avg_user_deal_probability', 'uit_avg_user_deal_probability', 'ii_avg_user_deal_probability', 'ica_avg_user_deal_probability', 'uc_avg_user_deal_probability', 'ic_avg_user_deal_probability', 'ui_avg_user_deal_probability',
                  'i_avg_item_deal_probability', 'iu_avg_user_deal_probability', 'u_avg_user_deal_probability', 'iit_avg_user_deal_probability', 'uca_avg_user_deal_probability', 'uu_avg_user_deal_probability', 'ir_avg_user_deal_probability', 'ip_avg_user_deal_probability']
@@ -144,7 +146,7 @@ def train():
                     # img_data
                     ], axis=1, copy=False).astype(DTYPE)
     del tx_data
-    df['exif_date_diff'] = df['070_date'] - df['071_date']
+
     gc.collect()
     logger.info(f'load df {df.shape}')
 
