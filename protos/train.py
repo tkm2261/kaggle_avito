@@ -59,6 +59,10 @@ def train():
     #cols = [col for col in df if df[col].dtype != object and col not in ('t_data_id', 't_activation_date')]
     #df[cols] = df[cols].astype(DTYPE)
     gc.collect()
+
+    df['pred_image_top_1'] = pd.read_csv('train_image_top_1_features.csv', usecols=[
+                                         'image_top_1'])['image_top_1'].values
+
     logger.info(f'load 1 {df.shape}')
     y_train = df['t_deal_probability'].values
     df.drop(['t_deal_probability'], axis=1, errors='ignore', inplace=True)
@@ -140,7 +144,7 @@ def train():
                     # img_data
                     ], axis=1, copy=False).astype(DTYPE)
     del tx_data
-
+    df['exif_date_diff'] = df['070_date'] - df['071_date']
     gc.collect()
     logger.info(f'load df {df.shape}')
 
@@ -178,7 +182,7 @@ def train():
                   'subsample_freq': [1],
                   'seed': [114],
                   'colsample_bytree': [0.8],
-                  'learning_rate': [0.02],
+                  'learning_rate': [0.1],
                   'max_depth': [-1],
                   'min_split_gain': [0.01],
                   'reg_alpha': [1],
@@ -187,7 +191,7 @@ def train():
                   'objective': ['xentropy'],
                   'scale_pos_weight': [1],
                   'verbose': [-1],
-                  'boosting_type': ['dart'],
+                  'boosting_type': ['gbdt'],
                   'metric': ['rmse'],
                   # 'device': ['gpu'],
                   }
@@ -348,6 +352,9 @@ def predict():
     df = pd.read_feather('test_0612.ftr')  # , parse_dates=['t_activation_date'])
     tx_data = pd.read_csv('test2.csv')
     tx_data = tx_data[[col for col in tx_data if "description" in col or "text_feat" in col or "title" in col]]
+
+    df['pred_image_top_1'] = pd.read_csv('test_image_top_1_features.csv', usecols=[
+                                         'image_top_1'])['image_top_1'].values
 
     # with open('nn_test.pkl', 'rb') as f:
     #    _nn_data = pickle.load(f)
