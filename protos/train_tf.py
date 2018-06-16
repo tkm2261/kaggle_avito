@@ -61,7 +61,7 @@ def train():
     y_train = df['t_deal_probability'].values
     df.drop(['t_deal_probability'], axis=1, errors='ignore', inplace=True)
     logger.info(f'train df size {df.shape}')
-    x_train = pd.read_feather('train_teppei.ftr')
+    x_train = pd.read_feather('target_tmp/train_target_enc.ftr')
     usecols = x_train.columns.values.tolist()
 
     del df
@@ -261,6 +261,6 @@ if __name__ == '__main__':
     logger.setLevel(DEBUG)
     logger.addHandler(handler)
 
-    # train()
+    train()
     # train2()
     predict()
