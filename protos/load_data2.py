@@ -14,8 +14,8 @@ from multiprocessing import Pool
 from logging import getLogger
 logger = getLogger(__name__)
 
-TRAIN_DATA_PATH = '../data/dmt_train_0602/'
-TEST_DATA_PATH = '../data/dmt_test_0602/'
+TRAIN_DATA_PATH = '../data/dmt_train_0618/'
+TEST_DATA_PATH = '../data/dmt_test_0618/'
 
 
 def read_csv(filename):
@@ -25,6 +25,9 @@ def read_csv(filename):
              'ct_city', 'isn_item_seq_number', 'pc_parent_category_name',
              'r_region', 'ut_user_type', 'it1_image_top_1'] + ['ur_user_id', 'ur_region', 'uc_user_id', 'uc_city', 'up_user_id', 'up_parent_category_name', 'uca_user_id', 'uca_category_name', 'ui_user_id', 'ui_item_seq_number', 'uu_user_id', 'uu_user_type', 'uit_user_id', 'uit_image_top_1', 'ir_item_id', 'ir_region', 'ic_item_id', 'ic_city', 'ip_item_id', 'ip_parent_category_name', 'ica_item_id', 'ica_category_name', 'ii_item_id', 'ii_item_seq_number', 'iu_item_id', 'iu_user_type', 'iit_item_id', 'iit_image_top_1'],
             axis=1, inplace=True, errors='ignore')
+
+    df.drop([col for col in df if 'item_id' in col], axis=1, inplace=True)
+    df.drop([col for col in df if 'user_id' in col], axis=1, inplace=True)
 
     df.drop([col for col in df if 'sum' in col and 'deal_probability' in col],
             axis=1, inplace=True, errors='ignore')
@@ -201,22 +204,22 @@ if __name__ == '__main__':
     logger.setLevel(DEBUG)
     logger.addHandler(handler)
 
-    # make_map_encoder()
+    make_map_encoder()
 
     """
     # print(load_train_data().head())
-    load_train_data().to_csv('train_0602.csv', index=False)
-    load_test_data().to_csv('test_0602.csv', index=False)
+    load_train_data().to_csv('train_0618.csv', index=False)
+    load_test_data().to_csv('test_0618.csv', index=False)
     """
     df = load_train_data(
-    )  # pd.read_csv('train_0602.csv', parse_dates=['t_activation_date'], float_precision='float32')
+    )  # pd.read_csv('train_0618.csv', parse_dates=['t_activation_date'], float_precision='float32')
     for col in df:
         if df[col].dtype != object and col not in ('t_data_id', 't_activation_date'):
             df[col] = df[col].astype('float32')
-    df.to_feather('train_0602.ftr')
+    df.to_feather('train_0618.ftr')
 
-    df = load_test_data()  # pd.read_csv('test_0602.csv', parse_dates=['t_activation_date'], float_precision='float32')
+    df = load_test_data()  # pd.read_csv('test_0618.csv', parse_dates=['t_activation_date'], float_precision='float32')
     for col in df:
         if df[col].dtype != object and col not in ('t_data_id', 't_activation_date'):
             df[col] = df[col].astype('float32')
-    df.to_feather('test_0602.ftr')
+    df.to_feather('test_0618.ftr')
