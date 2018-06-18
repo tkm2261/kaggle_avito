@@ -70,11 +70,24 @@ def train():
     #train, test = train_test_split(np.arange(df.shape[0]), test_size=0.1, random_state=42)
     df['t_activation_date'] = pd.to_datetime(df['t_activation_date']).apply(lambda x: x.timestamp())
 
-    #df.drop(['t_activation_date', 't_item_id'], axis=1, errors='ignore', inplace=True)
+    df.drop(['t_activation_date', 't_item_id'] + ['i_sum_item_deal_probability', 'u_sum_user_deal_probability', 'isn_sum_isn_deal_probability', 'it1_sum_im1_deal_probability', 'pc_sum_pcat_deal_probability', 'ct_sum_city_deal_probability',
+                                                  'c_sum_category_deal_probability', 'ut_sum_usertype_deal_probability', 'r_sum_region_deal_probability'] + ['i_avg_item_deal_probability', 'it1_avg_im1_deal_probability', 'u_avg_user_deal_probability'] + ['ui_avg_user_deal_probability', 'ir_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'uit_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'iit_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'uca_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'ic_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'uu_avg_user_deal_probability'
 
-    drop_cols = ['ur_avg_user_deal_probability', 'up_avg_user_deal_probability', 'uit_avg_user_deal_probability', 'ii_avg_user_deal_probability', 'ica_avg_user_deal_probability', 'uc_avg_user_deal_probability', 'ic_avg_user_deal_probability', 'ui_avg_user_deal_probability',
-                 'i_avg_item_deal_probability', 'iu_avg_user_deal_probability', 'u_avg_user_deal_probability', 'iit_avg_user_deal_probability', 'uca_avg_user_deal_probability', 'uu_avg_user_deal_probability', 'ir_avg_user_deal_probability', 'ip_avg_user_deal_probability']
-    df.drop(drop_cols, axis=1, inplace=True)
+                                                                                                                                                                                                                                                              'ip_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'ica_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'ii_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'up_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'ur_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'uc_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'ip_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'uu_avg_user_deal_probability',
+                                                                                                                                                                                                                                                              'iu_avg_user_deal_probability'
+                                                                                                                                                                                                                                                              ], axis=1, errors='ignore', inplace=True)
 
     logger.info(f'load dropcols {df.shape}')
     gc.collect()
@@ -96,9 +109,9 @@ def train():
     #    _nn_data = pickle.load(f)
     # nn_data = pd.DataFrame(_nn_data, columns=[f'nn_{i}' for i in range(_nn_data.shape[1])])
 
-    with open('train_tfidf_all.pkl', 'rb') as f:
+    with open('train_tfidf.pkl', 'rb') as f:
         tfidf_title = pickle.load(f)  # .tocsc()
-        cols = pd.read_csv('tfidf_all_cols3.csv')['col'].values
+        cols = pd.read_csv('tfidf_cols5.csv')['col'].values
         tfidf_title = tfidf_title[:, cols].tocsc()
     logger.info(f'load tfidf_data {tfidf_title.shape}')
     # with open('train_tfidf_desc.pkl', 'rb') as f:
@@ -181,10 +194,10 @@ def train():
     #{'boosting_type': 'gbdt', 'colsample_bytree': 0.8, 'learning_rate': 0.1, 'max_bin': 255, 'max_depth': -1, 'metric': 'rmse', 'min_child_weight': 5, 'min_split_gain': 0, 'num_leaves': 255, 'objective': 'regression_l2', 'reg_alpha': 1, 'scale_pos_weight': 1, 'seed': 114, 'subsample': 1, 'subsample_freq': 1, 'verbose': -1}
     all_params = {'min_child_weight': [3],
                   'subsample': [1],
-                  'subsample_freq': [1],
-                  'seed': [114],
+                  'subsample_freq': [0],
+                  'seed': [114514],
                   'colsample_bytree': [0.8],
-                  'learning_rate': [0.1],
+                  'learning_rate': [0.02],
                   'max_depth': [-1],
                   'min_split_gain': [0.01],
                   'reg_alpha': [1],
@@ -193,8 +206,9 @@ def train():
                   'objective': ['xentropy'],
                   'scale_pos_weight': [1],
                   'verbose': [-1],
-                  'boosting_type': ['gbdt'],
+                  'boosting_type': ['dart'],
                   'metric': ['rmse'],
+                  'skip_drop': [0.7],
                   # 'device': ['gpu'],
                   }
 
@@ -244,7 +258,7 @@ def train():
             clf = lgb.train(params,
                             train_data,
                             100000,  # params['n_estimators'],
-                            early_stopping_rounds=30,
+                            early_stopping_rounds=100,
                             valid_sets=[test_data],
                             # feval=cst_metric_xgb,
                             # callbacks=[callback],
@@ -401,9 +415,9 @@ def predict():
                     # img_data
                     ], axis=1)
 
-    with open('test_tfidf_all.pkl', 'rb') as f:
+    with open('test_tfidf.pkl', 'rb') as f:
         tfidf_title = pickle.load(f)  # .tocsc()
-        cols = pd.read_csv('tfidf_all_cols3.csv')['col'].values
+        cols = pd.read_csv('tfidf_cols5.csv')['col'].values
         tfidf_title = tfidf_title[:, cols].tocsr()
     """
     cols = pd.read_csv('result_tf_0607/tfidf_cols.csv')['col'].values
