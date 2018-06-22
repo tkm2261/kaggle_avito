@@ -46,18 +46,18 @@ def train():
 
     # df = load_train_data()  # .sample(10000000, random_state=42).reset_index(drop=True)
     df = pd.read_feather('train_0618.ftr')  # , parse_dates=['t_activation_date'], float_precision='float32')
+    logger.info(f'load 1 {df.shape}')
+    logger.info(f'load 3 {df.shape}')
+
     #cols = [col for col in df if df[col].dtype != object and col not in ('t_data_id', 't_activation_date')]
     #df[cols] = df[cols].astype(DTYPE)
     gc.collect()
 
-    df['pred_image_top_1'] = pd.read_csv('train_image_top_1_features.csv', usecols=[
-                                         'image_top_1'])['image_top_1'].values
+    # df['pred_image_top_1'] = pd.read_csv('train_image_top_1_features.csv', usecols=[
+    #                                     'image_top_1'])['image_top_1'].values
 
-    logger.info(f'load 1 {df.shape}')
     y_train = df['t_deal_probability'].values
     df.drop(['t_deal_probability', 't_item_id'], axis=1, errors='ignore', inplace=True)
-    df.drop([col for col in df if 'item_id' in col], axis=1, inplace=True)
-    df.drop([col for col in df if 'user_id' in col], axis=1, inplace=True)
 
     #train, test = train_test_split(np.arange(df.shape[0]), test_size=0.1, random_state=42)
     df['t_activation_date'] = pd.to_datetime(df['t_activation_date']).apply(lambda x: x.timestamp())
@@ -108,9 +108,9 @@ def train():
     #    tfidf = pickle.load(f)  # .tocsc()
     #    cols = pd.read_csv('tfidf_desc_cols.csv')['col'].values
     #    tfidf_desc = tfidf[:, cols].tocsr()
-    with open('result_nn_0621/train_cv_tmp_mid.pkl', 'rb') as f:
-        nn_data = pickle.load(f)
-    nn_data = pd.DataFrame(nn_data, columns=[f'nn_chargram_{i}' for i in range(nn_data.shape[1])])
+    # with open('result_nn_0621/train_cv_tmp_mid.pkl', 'rb') as f:
+    #    nn_data = pickle.load(f)
+    #nn_data = pd.DataFrame(nn_data, columns=[f'nn_chargram_{i}' for i in range(nn_data.shape[1])])
 
     # with open('../fasttext/fast_max_train_title.pkl', 'rb') as f:
     #    fast_data = np.array(pickle.load(f), dtype='float32')
@@ -122,7 +122,7 @@ def train():
                     tx_data,
                     pd.read_feather('train_img_baseinfo_more.ftr'),
                     pd.read_feather('train_img_exif.ftr'),
-                    nn_data,
+                    # nn_data,
                     # pd.read_feather('train_tfidf_svd_64.ftr'),
                     # img_data,
                     # pd.read_feather('image_top1_class_train.ftr'),
@@ -193,7 +193,7 @@ def train():
                   'subsample_freq': [0],
                   'seed': [1145141],
                   'colsample_bytree': [0.8],
-                  'learning_rate': [0.01],
+                  'learning_rate': [0.1],
                   'max_depth': [-1],
                   'min_split_gain': [0.01],
                   'reg_alpha': [1],
@@ -363,16 +363,19 @@ def predict():
 
     # df = load_test_data()
     df = pd.read_feather('test_0618.ftr')  # , parse_dates=['t_activation_date'])
+    logger.info(f'load 1 {df.shape}')
+    logger.info(f'load 3 {df.shape}')
+
     df['t_activation_date'] = pd.to_datetime(df['t_activation_date']).apply(lambda x: x.timestamp())
 
     tx_data = pd.read_csv('test2.csv')
     tx_data = tx_data[[col for col in tx_data if "description" in col or "text_feat" in col or "title" in col]]
 
-    df['pred_image_top_1'] = pd.read_csv('test_image_top_1_features.csv', usecols=[
-                                         'image_top_1'])['image_top_1'].values
-    with open('result_nn_0621/test_tmp_pred.pkl', 'rb') as f:
-        nn_data = pickle.load(f)
-    nn_data = pd.DataFrame(nn_data, columns=[f'nn_chargram_{i}' for i in range(nn_data.shape[1])])
+    # df['pred_image_top_1'] = pd.read_csv('test_image_top_1_features.csv', usecols=[
+    #                                     'image_top_1'])['image_top_1'].values
+    # with open('result_nn_0621/test_tmp_pred.pkl', 'rb') as f:
+    #    nn_data = pickle.load(f)
+    #nn_data = pd.DataFrame(nn_data, columns=[f'nn_chargram_{i}' for i in range(nn_data.shape[1])])
 
     # with open('nn_test_chargram.pkl', 'rb') as f:
     #    _nn_data = pickle.load(f)
@@ -398,7 +401,7 @@ def predict():
                     tx_data,
                     pd.read_feather('test_img_exif.ftr'),
                     pd.read_feather('test_img_baseinfo_more.ftr'),
-                    nn_data,
+                    # nn_data,
                     # pd.read_feather('test_tfidf_svd_64.ftr'),
                     # pd.read_feather('image_top1_class_test.ftr'),
                     # fast_max_data_title,
