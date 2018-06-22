@@ -20,7 +20,7 @@ from tqdm import tqdm
 
 from load_data import load_train_data, load_test_data
 import sys
-DIR = 'result_tmp/'  # sys.argv[1]  # 'result_1008_rate001/'
+DIR = sys.argv[1]  # 'result_1008_rate001/'
 DTYPE = 'float32'
 print(DIR)
 print(DTYPE)
@@ -35,18 +35,8 @@ def cst_metric_xgb(pred, dtrain):
 
 def callback(data):
     if (data.iteration + 1) % 10 != 0:
+        print('progress: ', data.iteration + 1)
         return
-
-    clf = data.model
-    trn_data = clf.train_set
-    val_data = clf.valid_sets[0]
-    preds = [ele[2] for ele in clf.eval_valid(dummy) if ele[1] == 'dummy'][0]
-    preds = preds.reshape((21, -1)).T
-    preds = np.array([np.argmax(x) for x in preds], dtype=np.int)
-    labels = val_data.get_label().astype(np.int)
-    sc = log_loss(labels, preds)
-    sc2 = roc_auc_score(labels, preds)
-    logger.info('cal [{}] {} {}'.format(data.iteration + 1, sc, sc2))
 
 
 from scipy import sparse
@@ -118,9 +108,9 @@ def train():
     #    tfidf = pickle.load(f)  # .tocsc()
     #    cols = pd.read_csv('tfidf_desc_cols.csv')['col'].values
     #    tfidf_desc = tfidf[:, cols].tocsr()
-    # with open('nn_train_chargram.pkl', 'rb') as f:
-    #    _nn_data = pickle.load(f)
-    # nn_data_chargram = pd.DataFrame(_nn_data, columns=[f'nn_chargram_{i}' for i in range(_nn_data.shape[1])])
+    with open('result_nn_0621/train_cv_tmp_mid.pkl', 'rb') as f:
+        nn_data = pickle.load(f)
+    nn_data = pd.DataFrame(nn_data, columns=[f'nn_chargram_{i}' for i in range(nn_data.shape[1])])
 
     # with open('../fasttext/fast_max_train_title.pkl', 'rb') as f:
     #    fast_data = np.array(pickle.load(f), dtype='float32')
@@ -132,6 +122,7 @@ def train():
                     tx_data,
                     pd.read_feather('train_img_baseinfo_more.ftr'),
                     pd.read_feather('train_img_exif.ftr'),
+                    nn_data,
                     # pd.read_feather('train_tfidf_svd_64.ftr'),
                     # img_data,
                     # pd.read_feather('image_top1_class_train.ftr'),
@@ -200,20 +191,20 @@ def train():
     all_params = {'min_child_weight': [3],
                   'subsample': [1],
                   'subsample_freq': [0],
-                  'seed': [114514],
+                  'seed': [1145141],
                   'colsample_bytree': [0.8],
-                  'learning_rate': [0.02],
+                  'learning_rate': [0.01],
                   'max_depth': [-1],
                   'min_split_gain': [0.01],
                   'reg_alpha': [1],
-                  'max_bin': [255],
+                  'max_bin': [511],
                   'num_leaves': [255],
                   'objective': ['xentropy'],
                   'scale_pos_weight': [1],
                   'verbose': [-1],
                   'boosting_type': ['gbdt'],
                   'metric': ['rmse'],
-                  # 'skip_drop': [0.7],
+                  'skip_drop': [0.7],
                   # 'device': ['gpu'],
                   }
 
@@ -263,7 +254,7 @@ def train():
             clf = lgb.train(params,
                             train_data,
                             100000,  # params['n_estimators'],
-                            early_stopping_rounds=100,
+                            early_stopping_rounds=150,
                             valid_sets=[test_data],
                             # feval=cst_metric_xgb,
                             # callbacks=[callback],
@@ -343,8 +334,9 @@ def train():
     clf = lgb.train(min_params,
                     train_data,
                     int(trees * 1.1),
-                    valid_sets=[train_data],
-                    verbose_eval=10
+                    # valid_sets=[train_data],
+                    verbose_eval=10,
+                    callbacks=[callback]
                     )
     logger.info('train end')
     with open(DIR + 'model.pkl', 'wb') as f:
@@ -378,10 +370,9 @@ def predict():
 
     df['pred_image_top_1'] = pd.read_csv('test_image_top_1_features.csv', usecols=[
                                          'image_top_1'])['image_top_1'].values
-
-    # with open('nn_test.pkl', 'rb') as f:
-    #    _nn_data = pickle.load(f)
-    # nn_data = pd.DataFrame(_nn_data, columns=[f'nn_{i}' for i in range(_nn_data.shape[1])])
+    with open('result_nn_0621/test_tmp_pred.pkl', 'rb') as f:
+        nn_data = pickle.load(f)
+    nn_data = pd.DataFrame(nn_data, columns=[f'nn_chargram_{i}' for i in range(nn_data.shape[1])])
 
     # with open('nn_test_chargram.pkl', 'rb') as f:
     #    _nn_data = pickle.load(f)
@@ -407,10 +398,10 @@ def predict():
                     tx_data,
                     pd.read_feather('test_img_exif.ftr'),
                     pd.read_feather('test_img_baseinfo_more.ftr'),
+                    nn_data,
                     # pd.read_feather('test_tfidf_svd_64.ftr'),
                     # pd.read_feather('image_top1_class_test.ftr'),
                     # fast_max_data_title,
-                    # nn_data,
                     # img_data
                     ], axis=1)
 
