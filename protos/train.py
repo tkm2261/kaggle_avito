@@ -34,7 +34,7 @@ def cst_metric_xgb(pred, dtrain):
 
 
 def callback(data):
-    if (data.iteration + 1) % 10 != 0:
+    if (data.iteration + 1) % 10 == 0:
         print('progress: ', data.iteration + 1)
         return
 
@@ -45,9 +45,8 @@ from scipy import sparse
 def train():
 
     # df = load_train_data()  # .sample(10000000, random_state=42).reset_index(drop=True)
-    df = pd.read_feather('train_0618.ftr')  # , parse_dates=['t_activation_date'], float_precision='float32')
+    df = pd.read_feather('train_0618_2.ftr')  # , parse_dates=['t_activation_date'], float_precision='float32')
     logger.info(f'load 1 {df.shape}')
-    logger.info(f'load 3 {df.shape}')
 
     #cols = [col for col in df if df[col].dtype != object and col not in ('t_data_id', 't_activation_date')]
     #df[cols] = df[cols].astype(DTYPE)
@@ -156,6 +155,10 @@ def train():
     drop_cols = df_cols[df_cols['imp'] == 0]['col'].values
     df.drop(drop_cols, axis=1, errors='ignore', inplace=True)
 
+    df_cols = pd.read_csv('result_0623_external_dart/feature_importances.csv')
+    drop_cols = df_cols[df_cols['imp'] == 0]['col'].values
+    df.drop(drop_cols, axis=1, errors='ignore', inplace=True)
+
     gc.collect()
     logger.info(f'load df {df.shape}')
 
@@ -191,9 +194,9 @@ def train():
     all_params = {'min_child_weight': [3],
                   'subsample': [1],
                   'subsample_freq': [0],
-                  'seed': [1145141],
+                  'seed': [114],
                   'colsample_bytree': [0.8],
-                  'learning_rate': [0.1],
+                  'learning_rate': [0.01],
                   'max_depth': [-1],
                   'min_split_gain': [0.01],
                   'reg_alpha': [1],
@@ -202,9 +205,10 @@ def train():
                   'objective': ['xentropy'],
                   'scale_pos_weight': [1],
                   'verbose': [-1],
-                  'boosting_type': ['gbdt'],
+                  'boosting_type': ['dart'],
                   'metric': ['rmse'],
                   'skip_drop': [0.7],
+                  'xgboost_dart_mode': [True],
                   # 'device': ['gpu'],
                   }
 
@@ -362,9 +366,8 @@ def predict():
     logger.info('imp use {} {}'.format(imp[imp.imp > 0].shape, n_features))
 
     # df = load_test_data()
-    df = pd.read_feather('test_0618.ftr')  # , parse_dates=['t_activation_date'])
+    df = pd.read_feather('test_0618_2.ftr')  # , parse_dates=['t_activation_date'])
     logger.info(f'load 1 {df.shape}')
-    logger.info(f'load 3 {df.shape}')
 
     df['t_activation_date'] = pd.to_datetime(df['t_activation_date']).apply(lambda x: x.timestamp())
 
