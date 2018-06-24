@@ -21,7 +21,7 @@ from tqdm import tqdm
 from load_data import load_train_data, load_test_data
 import sys
 DIR = sys.argv[1]  # 'result_1008_rate001/'
-DTYPE = 'float32'
+DTYPE = 'float64'
 print(DIR)
 print(DTYPE)
 
@@ -87,12 +87,10 @@ def train():
     #    df['teppei_pred'] = pickle.load(f)  # .tocsc()
     # with open('train_dnn.pkl', 'rb') as f:
     #    df['densenet_pred'] = pickle.load(f)  # .tocsc()
-    """
-    img_data = np.load('train_feature_256_processed.npy')
-    img_data = pd.DataFrame(img_data, columns=[f'teppei_256_{i}' for i in range(img_data.shape[1])])
-    img_data.to_feather(f'train_teppei_256.ftr')
-    logger.info(f'load img_data {img_data.shape}')
-    """
+
+    img_data = np.load('background.npy')
+    df['teppei_white'] = img_data
+
     # with open('nn_train.pkl', 'rb') as f:
     #    _nn_data = pickle.load(f)
     # nn_data = pd.DataFrame(_nn_data, columns=[f'nn_{i}' for i in range(_nn_data.shape[1])])
@@ -191,7 +189,7 @@ def train():
         pickle.dump(usecols, f, -1)
 
     #{'boosting_type': 'gbdt', 'colsample_bytree': 0.8, 'learning_rate': 0.1, 'max_bin': 255, 'max_depth': -1, 'metric': 'rmse', 'min_child_weight': 5, 'min_split_gain': 0, 'num_leaves': 255, 'objective': 'regression_l2', 'reg_alpha': 1, 'scale_pos_weight': 1, 'seed': 114, 'subsample': 1, 'subsample_freq': 1, 'verbose': -1}
-    all_params = {'min_child_weight': [3],
+    all_params = {'min_child_weight': [4],
                   'subsample': [1],
                   'subsample_freq': [0],
                   'seed': [114],
@@ -205,7 +203,7 @@ def train():
                   'objective': ['xentropy'],
                   'scale_pos_weight': [1],
                   'verbose': [-1],
-                  'boosting_type': ['dart'],
+                  'boosting_type': ['gbdt'],
                   'metric': ['rmse'],
                   'skip_drop': [0.7],
                   'xgboost_dart_mode': [True],
@@ -391,12 +389,9 @@ def predict():
     #    fast_data = np.array(pickle.load(f), dtype='float32')
     # fast_max_data_desc = pd.DataFrame(fast_data, columns=[f'fast_desc_{i}' for i in range(fast_data.shape[1])])
 
-    """
-    img_data = np.load('train_feature_256_processed.npy')
-    img_data = pd.DataFrame(img_data, columns=[f'teppei_256_{i}' for i in range(img_data.shape[1])])
-    img_data.to_feather(f'train_teppei_256.ftr')
-    logger.info(f'load img_data {img_data.shape}')
-    """
+    img_data = np.load('background_test.npy')
+    df['teppei_white'] = img_data
+
     #img_data = sparse.load_npz('features_test.npz').todense()
     #img_data = pd.DataFrame(img_data, columns=[f'vgg16_{i}' for i in range(img_data.shape[1])])
     #vgg_data = pd.read_csv('../data/vgg_feat_test_classify.csv').drop('Unnamed: 0', axis=1)
@@ -408,7 +403,7 @@ def predict():
                     # pd.read_feather('test_tfidf_svd_64.ftr'),
                     # pd.read_feather('image_top1_class_test.ftr'),
                     # fast_max_data_title,
-                    # img_data
+                    # img_data,
                     ], axis=1)
 
     with open('test_tfidf.pkl', 'rb') as f:
