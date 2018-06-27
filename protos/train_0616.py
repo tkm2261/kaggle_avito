@@ -5,6 +5,7 @@ import pickle
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.model_selection import StratifiedKFold, KFold, train_test_split
 from sklearn.linear_model import LogisticRegression
+from sklearn.decomposition import TruncatedSVD
 from multiprocessing import Pool
 from sklearn.model_selection import GridSearchCV, ParameterGrid, StratifiedKFold, cross_val_predict
 # import xgboost as xgb
@@ -20,20 +21,32 @@ from tqdm import tqdm
 from load_data import load_train_data, load_test_data
 import sys
 DIR = 'result_tmp/'  # sys.argv[1]  # 'result_1008_rate001/'
-print(DIR)
-
 DTYPE = 'float32'
+print(DIR)
+print(DTYPE)
 
 
 def cst_metric_xgb(pred, dtrain):
     label = dtrain.get_label().astype(np.int)
     sc1 = np.sqrt(mean_squared_error(label, pred))
     sc = 100  # np.sqrt(mean_squared_error(label, pred.clip(0, 1)))
-    return 'rmse_clip', max(sc1, sc), False
+    return 'rmse_clip', sc1, False
 
 
-def dummy(pred, dtrain):
-    return 'dummy', pred, False
+def callback(data):
+    if (data.iteration + 1) % 10 != 0:
+        return
+
+    clf = data.model
+    trn_data = clf.train_set
+    val_data = clf.valid_sets[0]
+    preds = [ele[2] for ele in clf.eval_valid(dummy) if ele[1] == 'dummy'][0]
+    preds = preds.reshape((21, -1)).T
+    preds = np.array([np.argmax(x) for x in preds], dtype=np.int)
+    labels = val_data.get_label().astype(np.int)
+    sc = log_loss(labels, preds)
+    sc2 = roc_auc_score(labels, preds)
+    logger.info('cal [{}] {} {}'.format(data.iteration + 1, sc, sc2))
 
 
 from scipy import sparse
@@ -41,84 +54,22 @@ from scipy import sparse
 
 def train():
 
-    df = pd.read_feather('train_0618_2.ftr')  # , parse_dates=['t_activation_date'], float_precision='float32')
-    logger.info(f'load 1 {df.shape}')
+    # df = load_train_data()  # .sample(10000000, random_state=42).reset_index(drop=True)
+    df = pd.read_feather('train_0612.ftr')  # , parse_dates=['t_activation_date'], float_precision='float32')
+    #cols = [col for col in df if df[col].dtype != object and col not in ('t_data_id', 't_activation_date')]
+    #df[cols] = df[cols].astype(DTYPE)
     gc.collect()
-    y_train_raw = df['t_deal_probability'].values
-    y_train = df['t_deal_probability'].values >= 0.5
-
+    logger.info(f'load 1 {df.shape}')
+    y_train = df['t_deal_probability'].values
     df.drop(['t_deal_probability'], axis=1, errors='ignore', inplace=True)
 
-    df['t_activation_date'] = pd.to_datetime(df['t_activation_date']).apply(lambda x: x.timestamp())
+    #train, test = train_test_split(np.arange(df.shape[0]), test_size=0.1, random_state=42)
+    df.drop(['t_activation_date', 't_item_id'], axis=1, errors='ignore', inplace=True)
 
-    df.drop(['t_activation_date', 't_item_id'] +
-            ['i_sum_item_deal_probability', 'u_sum_user_deal_probability', 'isn_sum_isn_deal_probability',
-             'it1_sum_im1_deal_probability', 'pc_sum_pcat_deal_probability', 'ct_sum_city_deal_probability',
-             'c_sum_category_deal_probability', 'ut_sum_usertype_deal_probability', 'r_sum_region_deal_probability'] +
-            ['i_avg_item_deal_probability', 'it1_avg_im1_deal_probability', 'u_avg_user_deal_probability'] +
-            ['ui_avg_user_deal_probability', 'ir_avg_user_deal_probability', 'uit_avg_user_deal_probability',
-             'iit_avg_user_deal_probability', 'uca_avg_user_deal_probability', 'ic_avg_user_deal_probability',
-             'uu_avg_user_deal_probability', 'ip_avg_user_deal_probability', 'ica_avg_user_deal_probability',
-             'ii_avg_user_deal_probability', 'up_avg_user_deal_probability', 'ur_avg_user_deal_probability',
-             'uc_avg_user_deal_probability', 'ip_avg_user_deal_probability', 'uu_avg_user_deal_probability',
-             'iu_avg_user_deal_probability', 'pu1_avg_user_deal_probability', 'pu2_avg_user_deal_probability',
-             'pu3_avg_user_deal_probability', 'pi1_avg_user_deal_probability', 'pi2_avg_user_deal_probability',
-             'pi3_avg_user_deal_probability', ]
-            + ['p1_param_1', 'p2_param_2', 'p3_param_3', 'pu1_param_1', 'pu2_param_2', 'pu3_param_3',
-               'pi1_param_1', 'pi2_param_2', 'pi3_param_3'], axis=1, errors='ignore', inplace=True)
+    drop_cols = ['ur_avg_user_deal_probability', 'up_avg_user_deal_probability', 'uit_avg_user_deal_probability', 'ii_avg_user_deal_probability', 'ica_avg_user_deal_probability', 'uc_avg_user_deal_probability', 'ic_avg_user_deal_probability', 'ui_avg_user_deal_probability',
+                 'i_avg_item_deal_probability', 'iu_avg_user_deal_probability', 'u_avg_user_deal_probability', 'iit_avg_user_deal_probability', 'uca_avg_user_deal_probability', 'uu_avg_user_deal_probability', 'ir_avg_user_deal_probability', 'ip_avg_user_deal_probability']
+    df.drop(drop_cols, axis=1, inplace=True)
 
-    logger.info(f'load dropcols {df.shape}')
-    gc.collect()
-
-    tx_data = pd.read_csv('train2.csv')
-    tx_data = tx_data[[col for col in tx_data if "description" in col or "text_feat" in col or "title" in col]]
-    logger.info(f'load tx_data {tx_data.shape}')
-    # with open('result_tf_tmp/train_cv_tmp.pkl', 'rb') as f:
-    #    df['teppei_pred'] = pickle.load(f)  # .tocsc()
-    # with open('train_dnn.pkl', 'rb') as f:
-    #    df['densenet_pred'] = pickle.load(f)  # .tocsc()
-
-    img_data = np.load('background.npy')
-    df['teppei_white'] = img_data
-
-    # with open('nn_train.pkl', 'rb') as f:
-    #    _nn_data = pickle.load(f)
-    # nn_data = pd.DataFrame(_nn_data, columns=[f'nn_{i}' for i in range(_nn_data.shape[1])])
-
-    with open('train_tfidf.pkl', 'rb') as f:
-        tfidf_title = pickle.load(f)  # .tocsc()
-        cols = pd.read_csv('tfidf_cols6.csv')['col'].values
-        tfidf_title = tfidf_title[:, cols].tocsc()
-    logger.info(f'load tfidf_data {tfidf_title.shape}')
-
-    # with open('train_tfidf_desc.pkl', 'rb') as f:
-    #    tfidf = pickle.load(f)  # .tocsc()
-    #    cols = pd.read_csv('tfidf_desc_cols.csv')['col'].values
-    #    tfidf_desc = tfidf[:, cols].tocsr()
-    # with open('result_nn_0621/train_cv_tmp_mid.pkl', 'rb') as f:
-    #    nn_data = pickle.load(f)
-    #nn_data = pd.DataFrame(nn_data, columns=[f'nn_chargram_{i}' for i in range(nn_data.shape[1])])
-
-    # with open('../fasttext/fast_max_train_title.pkl', 'rb') as f:
-    #    fast_data = np.array(pickle.load(f), dtype='float32')
-    # fast_max_data_title = pd.DataFrame(fast_data, columns=[f'fast_title_{i}' for i in range(fast_data.shape[1])])
-    # with open('../fasttext/fast_max_train_desc.pkl', 'rb') as f:
-    #    fast_data = np.array(pickle.load(f), dtype='float32')
-    # fast_max_data_desc = pd.DataFrame(fast_data, columns=[f'fast_desc_{i}' for i in range(fast_data.shape[1])])
-    df = pd.concat([df,
-                    tx_data,
-                    pd.read_feather('train_img_baseinfo_more.ftr'),
-                    pd.read_feather('train_img_exif.ftr'),
-                    # nn_data,
-                    # pd.read_feather('train_tfidf_svd_64.ftr'),
-                    # img_data,
-                    # pd.read_feather('image_top1_class_train.ftr'),
-                    # vgg_data,
-                    # fast_max_data_title,
-                    # nn_data,
-                    # img_data
-                    ], axis=1, copy=False).astype(DTYPE)
-    del tx_data
     df_cols = pd.read_csv('result_0601_useritemcols/feature_importances.csv')
     drop_cols = df_cols[df_cols['imp'] == 0]['col'].values
     df.drop(drop_cols, axis=1, errors='ignore', inplace=True)
@@ -135,21 +86,71 @@ def train():
     drop_cols = df_cols[df_cols['imp'] == 0]['col'].values
     df.drop(drop_cols, axis=1, errors='ignore', inplace=True)
 
-    df_cols = pd.read_csv('result_0616_dart/feature_importances.csv')
-    drop_cols = df_cols[df_cols['imp'] == 0]['col'].values
-    df.drop(drop_cols, axis=1, errors='ignore', inplace=True)
+    logger.info(f'load dropcols {df.shape}')
+    gc.collect()
 
-    df_cols = pd.read_csv('result_0618_newdata//feature_importances.csv')
-    drop_cols = df_cols[df_cols['imp'] == 0]['col'].values
-    df.drop(drop_cols, axis=1, errors='ignore', inplace=True)
+    tx_data = pd.read_csv('train2.csv')
+    tx_data = tx_data[[col for col in tx_data if "description" in col or "text_feat" in col or "title" in col]]
+    logger.info(f'load tx_data {tx_data.shape}')
+    # with open('result_tf_tmp/train_cv_tmp.pkl', 'rb') as f:
+    #    df['teppei_pred'] = pickle.load(f)  # .tocsc()
+    # with open('train_dnn.pkl', 'rb') as f:
+    #    df['densenet_pred'] = pickle.load(f)  # .tocsc()
+    """
+    img_data = pd.read_feather('train_teppei.ftr').fillna(0).astype(DTYPE)
+    n_dim = 64
+    img_svd = TruncatedSVD(n_dim, random_state=0)
+    img_data = pd.DataFrame(img_svd.fit_transform(img_data), columns=[f'teppei_svd_{i}' for i in range(n_dim)])
+    with open('img_svd.pkl', 'wb') as f:
+        pickle.dump(img_svd, f, -1)
+    img_data.to_feather(f'train_teppei_svd_{n_dim}.ftr')
+    logger.info(f'load img_data {img_data.shape}')
+    """
 
-    df_cols = pd.read_csv('result_0623_external_dart/feature_importances.csv')
-    drop_cols = df_cols[df_cols['imp'] == 0]['col'].values
-    df.drop(drop_cols, axis=1, errors='ignore', inplace=True)
+    # with open('nn_train.pkl', 'rb') as f:
+    #    _nn_data = pickle.load(f)
+    # nn_data = pd.DataFrame(_nn_data, columns=[f'nn_{i}' for i in range(_nn_data.shape[1])])
+
+    with open('train_tfidf.pkl', 'rb') as f:
+        tfidf_title = pickle.load(f)  # .tocsc()
+        cols = pd.read_csv('tfidf_cols5.csv')['col'].values
+        tfidf_title = tfidf_title[:, cols].tocsc()
+    logger.info(f'load tfidf_data {tfidf_title.shape}')
+    # with open('train_tfidf_desc.pkl', 'rb') as f:
+    #    tfidf = pickle.load(f)  # .tocsc()
+    #    cols = pd.read_csv('tfidf_desc_cols.csv')['col'].values
+    #    tfidf_desc = tfidf[:, cols].tocsr()
+    # with open('nn_train_chargram.pkl', 'rb') as f:
+    #    _nn_data = pickle.load(f)
+    # nn_data_chargram = pd.DataFrame(_nn_data, columns=[f'nn_chargram_{i}' for i in range(_nn_data.shape[1])])
+
+    # with open('../fasttext/fast_max_train_title.pkl', 'rb') as f:
+    #    fast_data = np.array(pickle.load(f), dtype='float32')
+    # fast_max_data_title = pd.DataFrame(fast_data, columns=[f'fast_title_{i}' for i in range(fast_data.shape[1])])
+    # with open('../fasttext/fast_max_train_desc.pkl', 'rb') as f:
+    #    fast_data = np.array(pickle.load(f), dtype='float32')
+    # fast_max_data_desc = pd.DataFrame(fast_data, columns=[f'fast_desc_{i}' for i in range(fast_data.shape[1])])
+    df = pd.concat([df,
+                    tx_data,
+                    pd.read_feather('train_img_baseinfo_more.ftr'),
+                    pd.read_feather('train_img_exif.ftr'),
+                    pd.read_feather('image_top1_class_train.ftr'),
+                    # vgg_data,
+                    # fast_max_data_title,
+                    # nn_data,
+                    # img_data
+                    ], axis=1, copy=False).astype(DTYPE)
+    del tx_data
 
     gc.collect()
     logger.info(f'load df {df.shape}')
-    x_train = df.values
+
+    #cols = pd.read_csv('result_tf_0607/tfidf_cols2.csv')['col'].values
+    # tfidf2 = sparse.hstack([sparse.load_npz('result_tf_0607/train_tfidf_matrix_title.npz'),
+    #                        sparse.load_npz('result_tf_0607/train_tfidf_matrix_description.npz')
+    #                        ], format='csr', dtype=DTYPE)[:, cols]
+
+    x_train = df.values  # sparse.csc_matrix(df.values, dtype=DTYPE)
 
     x_train = sparse.hstack([x_train,
                              tfidf_title,
@@ -172,27 +173,45 @@ def train():
     with open(DIR + 'usecols.pkl', 'wb') as f:
         pickle.dump(usecols, f, -1)
 
-    all_params = {'min_child_weight': [4],
-                  'subsample': [1],
-                  'subsample_freq': [0],
+    #{'boosting_type': 'gbdt', 'colsample_bytree': 0.8, 'learning_rate': 0.1, 'max_bin': 255, 'max_depth': -1, 'metric': 'rmse', 'min_child_weight': 5, 'min_split_gain': 0, 'num_leaves': 255, 'objective': 'regression_l2', 'reg_alpha': 1, 'scale_pos_weight': 1, 'seed': 114, 'subsample': 1, 'subsample_freq': 1, 'verbose': -1}
+    all_params = {'min_child_weight': [3],
+                  'subsample': [0.9],
+                  'subsample_freq': [1],
                   'seed': [114],
                   'colsample_bytree': [0.8],
                   'learning_rate': [0.1],
                   'max_depth': [-1],
                   'min_split_gain': [0.01],
                   'reg_alpha': [1],
-                  'max_bin': [511],
+                  'max_bin': [255],
                   'num_leaves': [255],
-                  'objective': ['binary'],
+                  'objective': ['xentropy'],
                   'scale_pos_weight': [1],
                   'verbose': [-1],
-                  # 'boosting_type': ['dart'],
-                  'metric': ['binary_logloss'],
-                  'skip_drop': [0.7],
-                  # 'xgboost_dart_mode': [True],
+                  'boosting_type': ['gbdt'],
+                  'metric': ['rmse'],
                   # 'device': ['gpu'],
                   }
 
+    """
+    _params = {'colsample_bytree': 0.7, 'learning_rate': 0.1, 'max_bin': 255, 'max_depth': -1, 'min_child_weight': 5, 'min_split_gain': 0,
+               'num_leaves': 255, 'objective': 'regression_l2', 'reg_alpha': 1, 'scale_pos_weight': 1, 'seed': 114, 'subsample': 1, 'subsample_freq': 1, 'verbose': -1, 'metric': 'rmse'}
+    """
+    """
+    min_params = {
+        'min_child_weight': 5,
+        'boosting_type': 'gbdt',
+        'objective': 'regression',
+        # 'max_depth': 15,
+        'num_leaves': 300,
+        'feature_fraction': 0.65,
+        'bagging_fraction': 0.85,
+        # 'bagging_freq': 5,
+        'learning_rate': 0.02,  # 0.02
+        'metric': 'rmse'
+    }
+    all_params = {p: [v] for p, v in min_params.items()}
+    """
     use_score = 0
     min_score = (100, 100, 100)
     for params in tqdm(list(ParameterGrid(all_params))):
@@ -207,19 +226,6 @@ def train():
             val_x = x_train[test]  # [[i for i in range(x_train.shape[0]) if test[i]]]
             trn_y = y_train[train]
             val_y = y_train[test]
-            val_y_raw = y_train_raw[test]
-
-            def callback(data):
-                if (data.iteration + 1) % 10 != 0:
-                    return
-
-                clf = data.model
-                val_data = clf.valid_sets[0]
-                preds = [ele[2] for ele in clf.eval_valid(dummy) if ele[1] == 'dummy'][0]
-                labels = val_y_raw
-                sc = np.sqrt(mean_squared_error(labels, preds.clip(0, 1)))
-                logger.info('cal [{}] {}'.format(data.iteration + 1, sc))
-
             train_data = lgb.Dataset(trn_x,  # .values.astype(np.float32),
                                      label=trn_y,
                                      feature_name=usecols
@@ -233,10 +239,10 @@ def train():
             clf = lgb.train(params,
                             train_data,
                             100000,  # params['n_estimators'],
-                            early_stopping_rounds=30,
+                            early_stopping_rounds=100,
                             valid_sets=[test_data],
                             # feval=cst_metric_xgb,
-                            callbacks=[callback],
+                            # callbacks=[callback],
                             verbose_eval=10
                             )
             pred = clf.predict(val_x).clip(0, 1)
@@ -314,7 +320,6 @@ def train():
                     train_data,
                     int(trees * 1.1),
                     valid_sets=[train_data],
-                    feval=cst_metric_xgb,
                     verbose_eval=10
                     )
     logger.info('train end')
@@ -341,19 +346,13 @@ def predict():
     logger.info('imp use {} {}'.format(imp[imp.imp > 0].shape, n_features))
 
     # df = load_test_data()
-    df = pd.read_feather('test_0618_2.ftr')  # , parse_dates=['t_activation_date'])
-    logger.info(f'load 1 {df.shape}')
-
-    df['t_activation_date'] = pd.to_datetime(df['t_activation_date']).apply(lambda x: x.timestamp())
-
+    df = pd.read_feather('test_0612.ftr')  # , parse_dates=['t_activation_date'])
     tx_data = pd.read_csv('test2.csv')
     tx_data = tx_data[[col for col in tx_data if "description" in col or "text_feat" in col or "title" in col]]
 
-    # df['pred_image_top_1'] = pd.read_csv('test_image_top_1_features.csv', usecols=[
-    #                                     'image_top_1'])['image_top_1'].values
-    # with open('result_nn_0621/test_tmp_pred.pkl', 'rb') as f:
-    #    nn_data = pickle.load(f)
-    #nn_data = pd.DataFrame(nn_data, columns=[f'nn_chargram_{i}' for i in range(nn_data.shape[1])])
+    # with open('nn_test.pkl', 'rb') as f:
+    #    _nn_data = pickle.load(f)
+    # nn_data = pd.DataFrame(_nn_data, columns=[f'nn_{i}' for i in range(_nn_data.shape[1])])
 
     # with open('nn_test_chargram.pkl', 'rb') as f:
     #    _nn_data = pickle.load(f)
@@ -365,10 +364,14 @@ def predict():
     # with open('../fasttext/fast_max_test_desc.pkl', 'rb') as f:
     #    fast_data = np.array(pickle.load(f), dtype='float32')
     # fast_max_data_desc = pd.DataFrame(fast_data, columns=[f'fast_desc_{i}' for i in range(fast_data.shape[1])])
+    """
+    img_data = pd.read_feather('test_teppei.ftr').fillna(0).astype(DTYPE)
+    with open('img_svd.pkl', 'rb') as f:
+        img_svd = pickle.load(f)
 
-    img_data = np.load('background_test.npy')
-    df['teppei_white'] = img_data
-
+    img_data = pd.DataFrame(img_svd.transform(img_data), columns=[f'teppei_svd_{i}' for i in range(32)])
+    img_data.to_feather(f'test_teppei_svd_{img_data.shape[1]}.ftr')
+    """
     #img_data = sparse.load_npz('features_test.npz').todense()
     #img_data = pd.DataFrame(img_data, columns=[f'vgg16_{i}' for i in range(img_data.shape[1])])
     #vgg_data = pd.read_csv('../data/vgg_feat_test_classify.csv').drop('Unnamed: 0', axis=1)
@@ -376,16 +379,15 @@ def predict():
                     tx_data,
                     pd.read_feather('test_img_exif.ftr'),
                     pd.read_feather('test_img_baseinfo_more.ftr'),
-                    # nn_data,
-                    # pd.read_feather('test_tfidf_svd_64.ftr'),
-                    # pd.read_feather('image_top1_class_test.ftr'),
+                    pd.read_feather('image_top1_class_train.ftr'),
                     # fast_max_data_title,
-                    # img_data,
+                    # nn_data,
+                    # img_data
                     ], axis=1)
 
     with open('test_tfidf.pkl', 'rb') as f:
         tfidf_title = pickle.load(f)  # .tocsc()
-        cols = pd.read_csv('tfidf_cols6.csv')['col'].values
+        cols = pd.read_csv('tfidf_cols5.csv')['col'].values
         tfidf_title = tfidf_title[:, cols].tocsr()
     """
     cols = pd.read_csv('result_tf_0607/tfidf_cols.csv')['col'].values
@@ -442,6 +444,5 @@ if __name__ == '__main__':
     logger.setLevel(DEBUG)
     logger.addHandler(handler)
 
-    train()
-    # train2()
+    # train()
     predict()

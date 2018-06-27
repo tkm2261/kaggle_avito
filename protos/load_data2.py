@@ -21,6 +21,20 @@ TEST_DATA_PATH = '../data/dmt_test_0618/'
 def read_csv(filename):
     logger.info(filename)
     df = pd.read_csv(filename, parse_dates=['t_activation_date'])
+    df_macro = pd.read_csv('region_macro.csv')
+    df = df.merge(df_macro, how='left', on='t_region')
+    nn = df.shape[0]
+    logger.info(f'load 2 {df.shape}')
+    df_macro = pd.read_csv('avito_region_city_features.csv', usecols=[
+        't_city', 't_region', 'latitude', 'longitude', 'lat_lon_hdbscan_cluster_05_03', 'lat_lon_hdbscan_cluster_10_03', 'lat_lon_hdbscan_cluster_20_03'])
+    cols = ['latitude', 'longitude', 'lat_lon_hdbscan_cluster_05_03',
+            'lat_lon_hdbscan_cluster_10_03', 'lat_lon_hdbscan_cluster_20_03']
+    for col in ['t_region', 't_city']:
+        tmp = df_macro.groupby(col, as_index=False)[cols].agg(['mean', 'max', 'min', 'std'])
+        tmp.columns = tmp.columns.map('-'.join)
+        df = df.merge(tmp, how='left', on=col)
+    if nn != df.shape[0]:
+        raise Exception('not match')
     df.drop(['t_image', 'p_item_id', 'i_item_id', 'u_user_id', 'c_category_name',
              'ct_city', 'isn_item_seq_number', 'pc_parent_category_name',
              'r_region', 'ut_user_type', 'it1_image_top_1'] + ['ur_user_id', 'ur_region', 'uc_user_id', 'uc_city', 'up_user_id', 'up_parent_category_name', 'uca_user_id', 'uca_category_name', 'ui_user_id', 'ui_item_seq_number', 'uu_user_id', 'uu_user_type', 'uit_user_id', 'uit_image_top_1', 'ir_item_id', 'ir_region', 'ic_item_id', 'ic_city', 'ip_item_id', 'ip_parent_category_name', 'ica_item_id', 'ica_category_name', 'ii_item_id', 'ii_item_seq_number', 'iu_item_id', 'iu_user_type', 'iit_item_id', 'iit_image_top_1'],
@@ -216,10 +230,10 @@ if __name__ == '__main__':
     for col in df:
         if df[col].dtype != object and col not in ('t_data_id', 't_activation_date'):
             df[col] = df[col].astype('float32')
-    df.to_feather('train_0618.ftr')
+    df.to_feather('train_0618_2.ftr')
 
     df = load_test_data()  # pd.read_csv('test_0618.csv', parse_dates=['t_activation_date'], float_precision='float32')
     for col in df:
         if df[col].dtype != object and col not in ('t_data_id', 't_activation_date'):
             df[col] = df[col].astype('float32')
-    df.to_feather('test_0618.ftr')
+    df.to_feather('test_0618_2.ftr')

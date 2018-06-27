@@ -28,22 +28,15 @@ from numba import jit
 
 
 DIRS = [
-    'result_0627_half_rate001/',
-    'result_0627_half/',
-    'result_0627_bin_rate001/',
-    'result_0626_bin/',
     'result_0623_external_dart/',
     'result_0620_dart_rate001/',
     'result_0618_tfidfall/',
-    'result_0625_teppei/',
-    'result_0624_xgbdart/',
     'result_0619_dart_newdata/',
     'result_0616_dart/',
     'result_0618_check/',
     'result_0622_nndata/',
     'result_0618_tfidf_mat/',
     'result_0622_external/',
-    'result_0624_teppei_white/',
     'result_0622_external2/',
     'result_0618_newdata_rate002/',
     'result_0615_xentropy/',
@@ -61,16 +54,24 @@ DIRS = [
 index = np.loadtxt('index.npy').astype(int)
 
 
+def activation(x):
+    return np.log1p(x)
+
+
+def deactivation(x):
+    return np.expm1(x)
+
+
 def load_pred(path):
     with open(path + 'train_cv_tmp.pkl', 'rb') as f:
         pred = pickle.load(f)[index]
-    return pred
+    return activation(pred)
 
 
 def load_test(path):
     with open(path + 'test_tmp_pred.pkl', 'rb') as f:
         pred = pickle.load(f)
-    return pred
+    return activation(pred)
 
 
 from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
@@ -131,6 +132,7 @@ if __name__ == '__main__':
         # pred = np.mean(use_preds, axis=0)
         pred = np.sum(use_preds, axis=0)
         pred /= sum(params.values())
+        pred = deactivation(pred)
 
         sc = np.sqrt(mean_squared_error(y_train, pred.clip(0, 1)))
         return sc
@@ -153,6 +155,7 @@ if __name__ == '__main__':
         # pred = np.mean(use_preds, axis=0)
         pred = np.sum(use_preds, axis=0)
         pred /= sum(params.values())
+        pred = deactivation(pred)
         return pred.clip(0, 1)
 
     trials = Trials()

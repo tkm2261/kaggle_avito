@@ -61,7 +61,7 @@ def train():
                                       # smooth_idf=False
                                       )
                  ),
-        n_jobs=4)
+        n_jobs=1)
     df = pd.DataFrame()
     list_size = []
     #

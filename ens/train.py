@@ -21,16 +21,16 @@ from tqdm import tqdm
 
 
 import sys
-DIR = 'ens_tmp/'  # sys.argv[1]  # 'result_1008_rate001/'
-DTYPE = 'float32'
+DIR = 'ens_tmp2/'  # sys.argv[1]  # 'result_1008_rate001/'
+DTYPE = 'float64'
 print(DIR)
 print(DTYPE)
 
 
 def train(x_train):
 
-    #y_train = pd.read_feather('../protos/train_0618.ftr')['t_deal_probability'].values
-    #np.savetxt('y_train.npy', y_train)
+    # y_train = pd.read_feather('../protos/train_0618.ftr')['t_deal_probability'].values
+    # np.savetxt('y_train.npy', y_train)
     y_train = np.loadtxt('y_train.npy')
     usecols = x_train.columns.values.tolist()
 
@@ -43,18 +43,22 @@ def train(x_train):
         y_train = y_train[test]
 
         break
-    #{'boosting_type': 'gbdt', 'colsample_bytree': 0.8, 'learning_rate': 0.1, 'max_bin': 255, 'max_depth': -1, 'metric': 'rmse', 'min_child_weight': 20, 'min_split_gain': 0.01, 'num_leaves': 31, 'objective': 'xentropy', 'reg_alpha': 1, 'scale_pos_weight': 1, 'seed': 114514, 'subsample': 1, 'subsample_freq': 0, 'verbose': -1}
-    all_params = {'min_child_weight': [150],
+
+    all_params = {'boosting_type': 'gbdt', 'colsample_bytree': 0.8, 'learning_rate': 0.01, 'max_bin': 255, 'max_depth': -1, 'metric': 'rmse', 'min_child_weight': 50,
+                  'min_split_gain': 0.01, 'num_leaves': 15, 'objective': 'xentropy ', 'reg_alpha': 0, 'scale_pos_weight': 1, 'seed': 114514, 'subsample': 1, 'subsample_freq': 0, 'verbose': -1}
+    """
+    all_params = {'min_child_weight': [80],
                   'subsample': [1],
                   'subsample_freq': [0],
                   'seed': [114514],
                   'colsample_bytree': [0.8],
-                  'learning_rate': [0.1],
-                  'max_depth': [-1],
+                  'learning_rate': [0.01],
+                  'max_depth': [4],
                   'min_split_gain': [0.01],
-                  'reg_alpha': [1],
+                  'reg_alpha': [0.001],
+                  'reg_lambda': [0.1],
                   'max_bin': [255],
-                  'num_leaves': [31],
+                  'num_leaves': [15],
                   'objective': ['xentropy'],
                   'scale_pos_weight': [1],
                   'verbose': [-1],
@@ -62,7 +66,8 @@ def train(x_train):
                   'metric': ['rmse'],
                   # 'skip_drop': [0.7],
                   }
-
+    """
+    all_params = {k: [v] for k, v in all_params.items()}
     use_score = 0
     min_score = (100, 100, 100)
     cv = KFold(n_splits=3, shuffle=True, random_state=871)
@@ -134,6 +139,7 @@ def train(x_train):
         logger.info('cv2: {})'.format(list_score2))
 
         logger.info('loss: {} (avg min max {})'.format(score[use_score], score))
+        logger.info('all loss: {}'.format(np.sqrt(mean_squared_error(y_train, all_pred))))
         logger.info('qwk: {} (avg min max {})'.format(score2[use_score], score2))
 
         if min_score[use_score] > score[use_score]:
@@ -236,22 +242,34 @@ if __name__ == '__main__':
     df_train = pd.DataFrame()
     df_test = pd.DataFrame()
     paths = [
-        'result_0618_tfidfall',
-        'result_0619_dart_newdata',
-        'result_0616_dart',
-        'result_0618_check',
-        'result_0618_tfidf_mat',
-        'result_0618_newdata_rate002',
-        'result_0615_xentropy',
-        'result_0619_newdata_tuned',
-        'result_0611_rate001',
-        'result_0615_exif',
-        'result_0612_newgroupby',
-        'result_0610_rate002',
-        'result_0611_teppei',
-        'result_0609_basemore',
-        'result_0618_newdata',
-        'result_0605_baseinfo',
+        'result_0627_half_rate001/',
+        'result_0627_half/',
+        'result_0627_bin_rate001/',
+        'result_0626_bin/',
+        'result_0623_external_dart/',
+        'result_0620_dart_rate001/',
+        'result_0618_tfidfall/',
+        'result_0625_teppei/',
+        'result_0624_xgbdart/',
+        'result_0619_dart_newdata/',
+        'result_0616_dart/',
+        'result_0618_check/',
+        'result_0622_nndata/',
+        'result_0618_tfidf_mat/',
+        'result_0622_external/',
+        'result_0624_teppei_white/',
+        'result_0622_external2/',
+        'result_0618_newdata_rate002/',
+        'result_0615_xentropy/',
+        'result_0619_newdata_tuned/',
+        'result_0611_rate001/',
+        'result_0615_exif/',
+        'result_0612_newgroupby/',
+        'result_0610_rate002/',
+        'result_0611_teppei/',
+        'result_0609_basemore/',
+        'result_0618_newdata/',
+        'result_0605_baseinfo/',
     ]
 
     for path in tqdm(paths):
@@ -259,6 +277,15 @@ if __name__ == '__main__':
             df_train[path] = pickle.load(f).clip(0, 1)
         with open(path + '/test_tmp_pred.pkl', 'rb') as f:
             df_test[path] = pickle.load(f).clip(0, 1)
-
+    """
+    from itertools import combinations
+    for p1, p2 in tqdm(list(combinations(paths, 2))):
+        with open(p1 + '/train_cv_tmp.pkl', 'rb') as f1:
+            with open(p2 + '/train_cv_tmp.pkl', 'rb') as f2:
+                df_train[p1 + '-' + p2] = (pickle.load(f1).clip(0, 1) + pickle.load(f2).clip(0, 1)) / 2
+        with open(p1 + '/test_tmp_pred.pkl', 'rb') as f1:
+            with open(p2 + '/test_tmp_pred.pkl', 'rb') as f2:
+                df_test[p1 + '-' + p2] = (pickle.load(f1).clip(0, 1) + pickle.load(f2).clip(0, 1)) / 2
+    """
     train(df_train)
     predict(df_test)

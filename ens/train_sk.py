@@ -21,7 +21,7 @@ from tqdm import tqdm
 import keras as ks
 
 import sys
-DIR = 'ens_tmp/'  # sys.argv[1]  # 'result_1008_rate001/'
+DIR = 'ens_tmp2/'  # sys.argv[1]  # 'result_1008_rate001/'
 DTYPE = 'float32'
 print(DIR)
 print(DTYPE)
@@ -143,7 +143,7 @@ def train(x_train):
         logger.info('cv2: {})'.format(list_score2))
 
         logger.info('loss: {} (avg min max {})'.format(score[use_score], score))
-        logger.info('qwk: {} (avg min max {})'.format(score2[use_score], score2))
+        logger.info('all loss: {}'.format(mean_squared_error(y_train, all_pred)))
 
         if min_score[use_score] > score[use_score]:
             min_score = score
@@ -218,22 +218,30 @@ if __name__ == '__main__':
     logger.addHandler(handler)
 
     paths = [
-        'result_0618_tfidfall',
-        'result_0619_dart_newdata',
-        'result_0616_dart',
-        'result_0618_check',
-        'result_0618_tfidf_mat',
-        'result_0618_newdata_rate002',
-        'result_0615_xentropy',
-        'result_0619_newdata_tuned',
-        'result_0611_rate001',
-        'result_0615_exif',
-        'result_0612_newgroupby',
-        'result_0610_rate002',
-        'result_0611_teppei',
-        'result_0609_basemore',
-        'result_0618_newdata',
-        'result_0605_baseinfo',
+        'result_0623_external_dart/',
+        'result_0620_dart_rate001/',
+        'result_0618_tfidfall/',
+        'result_0625_teppei/',
+        'result_0624_xgbdart/',
+        'result_0619_dart_newdata/',
+        'result_0616_dart/',
+        'result_0618_check/',
+        'result_0622_nndata/',
+        'result_0618_tfidf_mat/',
+        'result_0622_external/',
+        'result_0624_teppei_white/',
+        'result_0622_external2/',
+        'result_0618_newdata_rate002/',
+        'result_0615_xentropy/',
+        'result_0619_newdata_tuned/',
+        'result_0611_rate001/',
+        'result_0615_exif/',
+        'result_0612_newgroupby/',
+        'result_0610_rate002/',
+        'result_0611_teppei/',
+        'result_0609_basemore/',
+        'result_0618_newdata/',
+        'result_0605_baseinfo/',
     ]
 
     df_train = pd.DataFrame()
