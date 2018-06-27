@@ -8,9 +8,9 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.decomposition import TruncatedSVD
 from multiprocessing import Pool
 from sklearn.model_selection import GridSearchCV, ParameterGrid, StratifiedKFold, cross_val_predict
-# import xgboost as xgb
-from lightgbm.sklearn import LGBMClassifier
-import lightgbm as lgb
+import xgboost as xgb
+#from lightgbm.sklearn import LGBMClassifier
+#import lightgbm as lgb
 from sklearn.metrics import mean_squared_error
 import gc
 from logging import getLogger
@@ -188,7 +188,6 @@ def train():
     with open(DIR + 'usecols.pkl', 'wb') as f:
         pickle.dump(usecols, f, -1)
 
-    #{'boosting_type': 'gbdt', 'colsample_bytree': 0.8, 'learning_rate': 0.1, 'max_bin': 255, 'max_depth': -1, 'metric': 'rmse', 'min_child_weight': 5, 'min_split_gain': 0, 'num_leaves': 255, 'objective': 'regression_l2', 'reg_alpha': 1, 'scale_pos_weight': 1, 'seed': 114, 'subsample': 1, 'subsample_freq': 1, 'verbose': -1}
     all_params = {'min_child_weight': [4],
                   'subsample': [1],
                   'subsample_freq': [0],
@@ -209,26 +208,18 @@ def train():
                   'xgboost_dart_mode': [True],
                   # 'device': ['gpu'],
                   }
+    all_params = {'max_depth': [5],
+                  'min_child_weight': [4],
+                  'subsample': [0.9],
+                  'colsample_bytree': [0.8],
+                  'colsample_bylevel': [0.8],
+                  'eta': [0.02],
+                  'silent': [True],
+                  'tree_method': ['hist'],
+                  'eval_metric': ['rmse'],
+                  'objective': ['reg:logistic']
+                  }
 
-    """
-    _params = {'colsample_bytree': 0.7, 'learning_rate': 0.1, 'max_bin': 255, 'max_depth': -1, 'min_child_weight': 5, 'min_split_gain': 0,
-               'num_leaves': 255, 'objective': 'regression_l2', 'reg_alpha': 1, 'scale_pos_weight': 1, 'seed': 114, 'subsample': 1, 'subsample_freq': 1, 'verbose': -1, 'metric': 'rmse'}
-    """
-    """
-    min_params = {
-        'min_child_weight': 5,
-        'boosting_type': 'gbdt',
-        'objective': 'regression',
-        # 'max_depth': 15,
-        'num_leaves': 300,
-        'feature_fraction': 0.65,
-        'bagging_fraction': 0.85,
-        # 'bagging_freq': 5,
-        'learning_rate': 0.02,  # 0.02
-        'metric': 'rmse'
-    }
-    all_params = {p: [v] for p, v in min_params.items()}
-    """
     use_score = 0
     min_score = (100, 100, 100)
     for params in tqdm(list(ParameterGrid(all_params))):
@@ -243,25 +234,24 @@ def train():
             val_x = x_train[test]  # [[i for i in range(x_train.shape[0]) if test[i]]]
             trn_y = y_train[train]
             val_y = y_train[test]
-            train_data = lgb.Dataset(trn_x,  # .values.astype(np.float32),
+            train_data = xgb.DMatrix(trn_x,  # .values.astype(np.float32),
                                      label=trn_y,
-                                     feature_name=usecols
+                                     feature_names=usecols
                                      )
-            test_data = lgb.Dataset(val_x,  # .values.astype(np.float32),
+            test_data = xgb.DMatrix(val_x,  # .values.astype(np.float32),
                                     label=val_y,
-                                    feature_name=usecols
+                                    feature_names=usecols
                                     )
             del trn_x
             gc.collect()
-            clf = lgb.train(params,
+            watchlist = [(test_data, 'valid'), ]
+            clf = xgb.train(params,
                             train_data,
-                            100000,  # params['n_estimators'],
+                            10000,
+                            watchlist,
                             early_stopping_rounds=150,
-                            valid_sets=[test_data],
-                            # feval=cst_metric_xgb,
-                            # callbacks=[callback],
-                            verbose_eval=10
-                            )
+                            verbose_eval=1)
+
             pred = clf.predict(val_x).clip(0, 1)
 
             all_pred[test] = pred
@@ -326,238 +316,17 @@ def train():
 
     logger.info('all data size {}'.format(x_train.shape))
 
-    train_data = lgb.Dataset(x_train,
+    train_data = xgb.DMatrix(x_train,
                              label=y_train,
-                             feature_name=usecols
+                             feature_names=usecols
                              )
     del x_train
     gc.collect()
     logger.info('train start')
-    clf = lgb.train(min_params,
+    clf = xgb.train(min_params,
                     train_data,
                     int(trees * 1.1),
                     # valid_sets=[train_data],
-                    verbose_eval=10,
-                    callbacks=[callback]
-                    )
-    logger.info('train end')
-    with open(DIR + 'model.pkl', 'wb') as f:
-        pickle.dump(clf, f, -1)
-    # del x_train
-    gc.collect()
-
-    logger.info('save end')
-
-
-def train2():
-
-    # df = load_train_data()  # .sample(10000000, random_state=42).reset_index(drop=True)
-    df = pd.read_feather('train_0618_2.ftr')  # , parse_dates=['t_activation_date'], float_precision='float32')
-    logger.info(f'load 1 {df.shape}')
-
-    #cols = [col for col in df if df[col].dtype != object and col not in ('t_data_id', 't_activation_date')]
-    #df[cols] = df[cols].astype(DTYPE)
-    gc.collect()
-
-    # df['pred_image_top_1'] = pd.read_csv('train_image_top_1_features.csv', usecols=[
-    #                                     'image_top_1'])['image_top_1'].values
-
-    y_train = df['t_deal_probability'].values
-    df.drop(['t_deal_probability', 't_item_id'], axis=1, errors='ignore', inplace=True)
-
-    #train, test = train_test_split(np.arange(df.shape[0]), test_size=0.1, random_state=42)
-    df['t_activation_date'] = pd.to_datetime(df['t_activation_date']).apply(lambda x: x.timestamp())
-
-    df.drop(['t_activation_date', 't_item_id'] +
-            ['i_sum_item_deal_probability', 'u_sum_user_deal_probability', 'isn_sum_isn_deal_probability',
-             'it1_sum_im1_deal_probability', 'pc_sum_pcat_deal_probability', 'ct_sum_city_deal_probability',
-             'c_sum_category_deal_probability', 'ut_sum_usertype_deal_probability', 'r_sum_region_deal_probability'] +
-            ['i_avg_item_deal_probability', 'it1_avg_im1_deal_probability', 'u_avg_user_deal_probability'] +
-            ['ui_avg_user_deal_probability', 'ir_avg_user_deal_probability', 'uit_avg_user_deal_probability',
-             'iit_avg_user_deal_probability', 'uca_avg_user_deal_probability', 'ic_avg_user_deal_probability',
-             'uu_avg_user_deal_probability', 'ip_avg_user_deal_probability', 'ica_avg_user_deal_probability',
-             'ii_avg_user_deal_probability', 'up_avg_user_deal_probability', 'ur_avg_user_deal_probability',
-             'uc_avg_user_deal_probability', 'ip_avg_user_deal_probability', 'uu_avg_user_deal_probability',
-             'iu_avg_user_deal_probability', 'pu1_avg_user_deal_probability', 'pu2_avg_user_deal_probability',
-             'pu3_avg_user_deal_probability', 'pi1_avg_user_deal_probability', 'pi2_avg_user_deal_probability',
-             'pi3_avg_user_deal_probability', ]
-            + ['p1_param_1', 'p2_param_2', 'p3_param_3', 'pu1_param_1', 'pu2_param_2', 'pu3_param_3',
-               'pi1_param_1', 'pi2_param_2', 'pi3_param_3'], axis=1, errors='ignore', inplace=True)
-
-    logger.info(f'load dropcols {df.shape}')
-    gc.collect()
-
-    tx_data = pd.read_csv('train2.csv')
-    tx_data = tx_data[[col for col in tx_data if "description" in col or "text_feat" in col or "title" in col]]
-    logger.info(f'load tx_data {tx_data.shape}')
-    # with open('result_tf_tmp/train_cv_tmp.pkl', 'rb') as f:
-    #    df['teppei_pred'] = pickle.load(f)  # .tocsc()
-    # with open('train_dnn.pkl', 'rb') as f:
-    #    df['densenet_pred'] = pickle.load(f)  # .tocsc()
-
-    img_data = np.load('background.npy')
-    df['teppei_white'] = img_data
-
-    # with open('nn_train.pkl', 'rb') as f:
-    #    _nn_data = pickle.load(f)
-    # nn_data = pd.DataFrame(_nn_data, columns=[f'nn_{i}' for i in range(_nn_data.shape[1])])
-
-    with open('train_tfidf.pkl', 'rb') as f:
-        tfidf_title = pickle.load(f)  # .tocsc()
-        cols = pd.read_csv('tfidf_cols6.csv')['col'].values
-        tfidf_title = tfidf_title[:, cols].tocsc()
-    logger.info(f'load tfidf_data {tfidf_title.shape}')
-
-    # with open('train_tfidf_desc.pkl', 'rb') as f:
-    #    tfidf = pickle.load(f)  # .tocsc()
-    #    cols = pd.read_csv('tfidf_desc_cols.csv')['col'].values
-    #    tfidf_desc = tfidf[:, cols].tocsr()
-    # with open('result_nn_0621/train_cv_tmp_mid.pkl', 'rb') as f:
-    #    nn_data = pickle.load(f)
-    #nn_data = pd.DataFrame(nn_data, columns=[f'nn_chargram_{i}' for i in range(nn_data.shape[1])])
-
-    # with open('../fasttext/fast_max_train_title.pkl', 'rb') as f:
-    #    fast_data = np.array(pickle.load(f), dtype='float32')
-    # fast_max_data_title = pd.DataFrame(fast_data, columns=[f'fast_title_{i}' for i in range(fast_data.shape[1])])
-    # with open('../fasttext/fast_max_train_desc.pkl', 'rb') as f:
-    #    fast_data = np.array(pickle.load(f), dtype='float32')
-    # fast_max_data_desc = pd.DataFrame(fast_data, columns=[f'fast_desc_{i}' for i in range(fast_data.shape[1])])
-    df = pd.concat([df,
-                    tx_data,
-                    pd.read_feather('train_img_baseinfo_more.ftr'),
-                    pd.read_feather('train_img_exif.ftr'),
-                    # nn_data,
-                    # pd.read_feather('train_tfidf_svd_64.ftr'),
-                    # img_data,
-                    # pd.read_feather('image_top1_class_train.ftr'),
-                    # vgg_data,
-                    # fast_max_data_title,
-                    # nn_data,
-                    # img_data
-                    ], axis=1, copy=False).astype(DTYPE)
-    del tx_data
-    df_cols = pd.read_csv('result_0601_useritemcols/feature_importances.csv')
-    drop_cols = df_cols[df_cols['imp'] == 0]['col'].values
-    df.drop(drop_cols, axis=1, errors='ignore', inplace=True)
-
-    df_cols = pd.read_csv('result_0609_basemore/feature_importances.csv')
-    drop_cols = df_cols[df_cols['imp'] == 0]['col'].values
-    df.drop(drop_cols, axis=1, errors='ignore', inplace=True)
-
-    df_cols = pd.read_csv('result_0611_rate001/feature_importances.csv')
-    drop_cols = df_cols[df_cols['imp'] == 0]['col'].values
-    df.drop(drop_cols, axis=1, errors='ignore', inplace=True)
-
-    df_cols = pd.read_csv('result_0615_exif/feature_importances.csv')
-    drop_cols = df_cols[df_cols['imp'] == 0]['col'].values
-    df.drop(drop_cols, axis=1, errors='ignore', inplace=True)
-
-    df_cols = pd.read_csv('result_0616_dart/feature_importances.csv')
-    drop_cols = df_cols[df_cols['imp'] == 0]['col'].values
-    df.drop(drop_cols, axis=1, errors='ignore', inplace=True)
-
-    df_cols = pd.read_csv('result_0618_newdata//feature_importances.csv')
-    drop_cols = df_cols[df_cols['imp'] == 0]['col'].values
-    df.drop(drop_cols, axis=1, errors='ignore', inplace=True)
-
-    df_cols = pd.read_csv('result_0623_external_dart/feature_importances.csv')
-    drop_cols = df_cols[df_cols['imp'] == 0]['col'].values
-    df.drop(drop_cols, axis=1, errors='ignore', inplace=True)
-
-    gc.collect()
-    logger.info(f'load df {df.shape}')
-
-    #cols = pd.read_csv('result_tf_0607/tfidf_cols2.csv')['col'].values
-    # tfidf2 = sparse.hstack([sparse.load_npz('result_tf_0607/train_tfidf_matrix_title.npz'),
-    #                        sparse.load_npz('result_tf_0607/train_tfidf_matrix_description.npz')
-    #                        ], format='csr', dtype=DTYPE)[:, cols]
-
-    x_train = df.values  # sparse.csc_matrix(df.values, dtype=DTYPE)
-
-    x_train = sparse.hstack([x_train,
-                             tfidf_title,
-                             # tfidf2,
-                             # tfidf_desc
-                             ], format='csr', dtype=DTYPE)
-
-    usecols = df.columns.values.tolist()
-    usecols += [f'tfidf_title_{i}' for i in range(tfidf_title.shape[1])]
-    #usecols += [f'tfidf2_{i}' for i in range(tfidf2.shape[1])]
-    #          + [f'tfidf_desc_{i}' for i in range(tfidf_desc.shape[1])]
-    # usecols = list(range(x_train.shape[1]))
-
-    del df
-    gc.collect()
-
-    logger.info('train data size {}'.format(x_train.shape))
-    cv = KFold(n_splits=5, shuffle=True, random_state=871)
-
-    with open(DIR + 'usecols.pkl', 'wb') as f:
-        pickle.dump(usecols, f, -1)
-
-    #{'boosting_type': 'gbdt', 'colsample_bytree': 0.8, 'learning_rate': 0.1, 'max_bin': 255, 'max_depth': -1, 'metric': 'rmse', 'min_child_weight': 5, 'min_split_gain': 0, 'num_leaves': 255, 'objective': 'regression_l2', 'reg_alpha': 1, 'scale_pos_weight': 1, 'seed': 114, 'subsample': 1, 'subsample_freq': 1, 'verbose': -1}
-    all_params = {'min_child_weight': [4],
-                  'subsample': [1],
-                  'subsample_freq': [0],
-                  'seed': [114],
-                  'colsample_bytree': [0.8],
-                  'learning_rate': [0.01],
-                  'max_depth': [-1],
-                  'min_split_gain': [0.01],
-                  'reg_alpha': [1],
-                  'max_bin': [511],
-                  'num_leaves': [255],
-                  'objective': ['xentropy'],
-                  'scale_pos_weight': [1],
-                  'verbose': [-1],
-                  'boosting_type': ['dart'],
-                  'metric': ['rmse'],
-                  'skip_drop': [0.7],
-                  'xgboost_dart_mode': [True],
-                  # 'device': ['gpu'],
-                  }
-
-    """
-    _params = {'colsample_bytree': 0.7, 'learning_rate': 0.1, 'max_bin': 255, 'max_depth': -1, 'min_child_weight': 5, 'min_split_gain': 0,
-               'num_leaves': 255, 'objective': 'regression_l2', 'reg_alpha': 1, 'scale_pos_weight': 1, 'seed': 114, 'subsample': 1, 'subsample_freq': 1, 'verbose': -1, 'metric': 'rmse'}
-    """
-    """
-    min_params = {
-        'min_child_weight': 5,
-        'boosting_type': 'gbdt',
-        'objective': 'regression',
-        # 'max_depth': 15,
-        'num_leaves': 300,
-        'feature_fraction': 0.65,
-        'bagging_fraction': 0.85,
-        # 'bagging_freq': 5,
-        'learning_rate': 0.02,  # 0.02
-        'metric': 'rmse'
-    }
-    all_params = {p: [v] for p, v in min_params.items()}
-    """
-    use_score = 0
-    min_score = (100, 100, 100)
-    for min_params in tqdm(list(ParameterGrid(all_params))):
-        pass
-
-    trees = 14700
-
-    logger.info('all data size {}'.format(x_train.shape))
-
-    train_data = lgb.Dataset(x_train,
-                             label=y_train,
-                             feature_name=usecols
-                             )
-    del x_train
-    gc.collect()
-    logger.info('train start')
-    clf = lgb.train(min_params,
-                    train_data,
-                    int(trees * 1.1),
-                    # valid_sets=[train_data],
-                    verbose_eval=10,
-                    callbacks=[callback]
                     )
     logger.info('train end')
     with open(DIR + 'model.pkl', 'wb') as f:
@@ -684,5 +453,5 @@ if __name__ == '__main__':
     logger.setLevel(DEBUG)
     logger.addHandler(handler)
 
-    train2()
+    train()
     predict()
